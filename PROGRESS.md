@@ -40,7 +40,7 @@
 
 | Phase | 명칭 | 핵심 작업 | 상태 |
 |-------|------|-----------|------|
-| Phase 1 | MVP (더미 데이터) | UI 전체 구성, 더미 JSON 데이터로 화면 완성 | 🟡 진행 중 |
+| Phase 1 | MVP (더미 데이터) | UI 전체 구성, 더미 JSON 데이터로 화면 완성 | ✅ 완료 |
 | Phase 2 | API 연동 | 법제처 Open API 실제 연결, 키워드 변환 로직 | ⬜ 대기 중 (API 승인 필요) |
 | Phase 3 | AI 연동 | Claude/GPT API 연결, 조문 기반 요약 기능 | ⬜ 대기 중 (AI 키 결정 필요) |
 | Phase 4 | 고도화 | 즐겨찾기, 키워드 사전, UI/UX 정리 | ⬜ 대기 중 |
@@ -51,7 +51,7 @@
 
 ### 사전 세팅
 - [x] GitHub 레포 생성 (`medical-law-search`)
-- [ ] Vercel 연결 (자동 배포 설정)
+- [x] Vercel 연결 및 배포 완료 (medical-law-search.vercel.app)
 - [x] Next.js 프로젝트 초기화 (파일 수동 생성)
 
 ### 세션 1 — 프로젝트 구조 ✅ 완료
@@ -83,10 +83,10 @@
 - [x] AI 답변 영역 (더미 텍스트)
 - [x] 면책 문구 고정 표시 (숨기기 불가, 황색 배경)
 
-### 세션 6 — 남은 작업
-- [ ] `npm install` 후 로컬 실행 확인 (`npm run dev`)
-- [ ] Vercel 배포 연결 및 확인
-- [ ] 자주 찾는 주제 버튼 목록 결정 후 추가
+### 세션 6 — 마무리 ✅ 완료
+- [x] `npm install` 후 로컬 실행 확인 (`npm run dev`)
+- [x] Vercel 배포 완료 — **medical-law-search.vercel.app** (Framework: Next.js로 수정 후 성공)
+- [ ] 자주 찾는 주제 버튼 목록 결정 후 추가 (Phase 4에서 처리)
 
 ---
 
@@ -96,6 +96,7 @@
 |------|------|--------|-----------|
 | 2026-03-24 | - | 명령서 검토, 개발 전략 수립, PROGRESS.md 생성, ④⑥ 확정 | Phase 1 코드 작성 |
 | 2026-03-24 | Phase 1 | 전체 파일 생성 완료 (구조·더미데이터·홈·검색결과·상세·AI패널) | npm install → 로컬 실행 확인 → Vercel 배포 |
+| 2026-03-24 | Phase 1 완료 | 로컬 실행 확인 ✅ · Vercel 배포 성공 ✅ (Framework Next.js 설정 수정) | **법제처 API 승인 대기 → 승인 시 Phase 2 시작** |
 
 ---
 
@@ -122,4 +123,4 @@ IDE:       Google Antigravity
 
 ---
 
-*마지막 업데이트: 2026-03-24 — Phase 1 전체 파일 생성 완료. 다음: npm install → 로컬 확인 → Vercel 배포*
+*마지막 업데이트: 2026-03-24 — **Phase 1 완전 완료** (로컬 + Vercel 배포). 다음: 법제처 API 승인 시 Phase 2 시작*
