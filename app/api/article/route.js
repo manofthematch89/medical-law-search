@@ -7,6 +7,9 @@
 
 import { NextResponse } from "next/server";
 
+// 법제처 API는 한국 IP에서만 접근 가능 → 서울 리전 고정
+export const preferredRegion = "icn1";
+
 const LAW_API_OC = process.env.LAW_API_OC || "";
 const LAW_API_BASE = "https://www.law.go.kr/DRF";
 
