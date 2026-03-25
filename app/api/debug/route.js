@@ -14,37 +14,46 @@ export async function GET() {
     result.outgoing_ip = "error: " + e.message;
   }
 
-  // 2. Get IP info
-  try {
-    const r = await fetch(`https://ipapi.co/${result.outgoing_ip}/json/`);
-    const d = await r.json();
-    result.ip_country = d.country_name;
-    result.ip_region = d.region;
-    result.ip_org = d.org;
-  } catch (e) {
-    result.ip_info_error = e.message;
-  }
-
-  // 3. Test law.go.kr API directly
   const oc = process.env.LAW_API_OC || "(not set)";
   result.oc_value = oc;
+  const lawUrl = `https://www.law.go.kr/DRF/lawSearch.do?OC=${oc}&target=law&type=JSON&query=%EC%9D%98%EB%A3%8C%EB%B2%95&display=3`;
+
+  // 2. Test WITHOUT Referer
   try {
-    const lawUrl = `https://www.law.go.kr/DRF/lawSearch.do?OC=${oc}&target=law&type=JSON&query=%EC%9D%98%EB%A3%8C%EB%B2%95&display=3`;
-    result.law_url = lawUrl;
     const r = await fetch(lawUrl, { headers: { "Accept": "application/json" } });
-    result.law_status = r.status;
     const text = await r.text();
-    result.law_raw = text.substring(0, 500);
-    try {
-      const json = JSON.parse(text);
-      result.law_json_keys = Object.keys(json);
-      if (json.result) result.law_verification = json.result;
-      if (json.LawSearch) result.law_count = json.LawSearch.totalCnt;
-    } catch (e) {
-      result.law_parse_error = e.message;
-    }
+    const json = JSON.parse(text);
+    result.no_referer = json.result || (json.LawSearch ? "OK count=" + json.LawSearch.totalCnt : text.substring(0, 100));
   } catch (e) {
-    result.law_error = e.message;
+    result.no_referer_err = e.message;
+  }
+
+  // 3. Test WITH Referer
+  try {
+    const r = await fetch(lawUrl, {
+      headers: {
+        "Accept": "application/json",
+        "Referer": "https://medical-law-search.vercel.app/",
+        "Origin": "https://medical-law-search.vercel.app",
+        "User-Agent": "Mozilla/5.0 (compatible; MdLaw/1.0)"
+      }
+    });
+    const text = await r.text();
+    const json = JSON.parse(text);
+    result.with_referer = json.result || (json.LawSearch ? "OK count=" + json.LawSearch.totalCnt : text.substring(0, 100));
+  } catch (e) {
+    result.with_referer_err = e.message;
+  }
+
+  // 4. Test with HTTP (not HTTPS)
+  try {
+    const httpUrl = lawUrl.replace("https://", "http://");
+    const r = await fetch(httpUrl, { headers: { "Accept": "application/json" } });
+    const text = await r.text();
+    const json = JSON.parse(text);
+    result.http_test = json.result || (json.LawSearch ? "OK count=" + json.LawSearch.totalCnt : text.substring(0, 100));
+  } catch (e) {
+    result.http_test_err = e.message;
   }
 
   return NextResponse.json(result, { status: 200 });
