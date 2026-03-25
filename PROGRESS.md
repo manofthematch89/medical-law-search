@@ -12,25 +12,34 @@
 | 앱 이름 | **MdLaw** |
 | 프로젝트명 | 의료법령 검색 AI 탐색기 |
 | 플랫폼 | 웹 (React / Next.js) |
-| AI IDE | Google Antigravity (만료) / Cowork |
-| 배포 | Vercel (연결 완료) |
-| 저장소 | GitHub (설치 완료) |
-| 명령서 버전 | v1.0 (2026-03-24) |
-| 법제처 API | ✅ **승인 완료** (OC: motm2014) |
+| 배포 | Vercel — medical-law-search.vercel.app |
+| 저장소 | GitHub — manofthematch89/medical-law-search |
+| 법제처 API | ✅ 연동 완료 (OC: **1234**, IP: 13.209.43.211 등록) |
 | AI API | **미결정** (Claude API 또는 OpenAI API) |
 
 ---
 
-## ⚠️ 미결정 항목 (작업 전 확인 필요)
+## ⚠️ 현재 알려진 이슈
 
-| 번호 | 항목 | 상태 | 결정 내용 |
-|------|------|------|-----------|
-| ④ | 앱 공식 이름 | ✅ 확정 | **MdLaw** |
-| ⑤ | 자주 찾는 주제 버튼 목록 | 🔜 Phase 1 UI 확인 후 결정 | 일단 제외, 나중에 추가 |
-| ⑥ | 모바일 대응 여부 | ✅ 확정 | **모바일 대응 O** (반응형 레이아웃) |
-| ① | 배포 환경 (Vercel vs 내부 서버) | ✅ 확정 | **Vercel** |
-| ② | 로그인/인증 여부 | 🔜 Phase 3 전 결정 | |
-| ③ | AI 엔진 선택 (Claude vs GPT) | 🔜 Phase 3 전 결정 | |
+| 번호 | 내용 | 상태 |
+|------|------|------|
+| 1 | 법제처 검색: 법령명 직접 입력 시만 결과 나옴 | 🔧 Phase 3 개선 필요 |
+| 2 | 주제어(예: "진료기록부") 검색 시 0건 반환 | 🔧 법령ID 하드코딩으로 해결 예정 |
+| 3 | AI 요약 버튼은 더미 텍스트 상태 | ⬜ Phase 3에서 처리 |
+
+---
+
+## 🔑 법제처 API 핵심 기술 메모
+
+```
+OC 값: 1234  (환경변수 LAW_API_OC=1234)
+서버 IP: 13.209.43.211  (Vercel Edge, 서울 리전)
+Referer 헤더: https://medical-law-search.vercel.app/  ← 필수! 없으면 검증 실패
+runtime: edge + preferredRegion: icn1  ← 서울 리전 강제
+```
+
+**⚠️ 중요:** 법제처 API는 OC + IP + Referer 헤더 3가지를 모두 체크합니다.
+fetch 호출 시 반드시 Referer/Origin 헤더를 포함해야 합니다.
 
 ---
 
@@ -38,99 +47,64 @@
 
 | Phase | 명칭 | 핵심 작업 | 상태 |
 |-------|------|-----------|------|
-| Phase 1 | MVP (더미 데이터) | UI 전체 구성, 더미 JSON 데이터로 화면 완성 | ✅ 완료 |
-| Phase 2 | API 연동 | 법제처 Open API 실제 연결, 키워드 변환 로직 | ✅ 완료 |
-| Phase 3 | AI 연동 | Claude/GPT API 연결, 조문 기반 요약 기능 | ⬜ 대기 중 (AI 키 결정 필요) |
+| Phase 1 | MVP (더미 데이터) | UI 전체 구성, 더미 JSON으로 화면 완성 | ✅ 완료 |
+| Phase 2 | API 연동 | 법제처 Open API 실제 연결 | ✅ 완료 |
+| Phase 3 | AI 연동 | Claude/GPT 연결, 조문 기반 요약 | 🔧 법제처 API 수정 완료, AI 연동 대기 |
 | Phase 4 | 고도화 | 즐겨찾기, 키워드 사전, UI/UX 정리 | ⬜ 대기 중 |
-
----
-
-## ✅ Phase 1 세부 작업 체크리스트
-
-### 사전 세팅
-- [x] GitHub 레포 생성 (`medical-law-search`)
-- [x] Vercel 연결 및 배포 완료 (medical-law-search.vercel.app)
-- [x] Next.js 프로젝트 초기화 (파일 수동 생성)
-
-### 세션 1 — 프로젝트 구조 ✅ 완료
-- [x] 폴더 구조 확정
-- [x] `lib/lawApi.js` 더미 모듈 생성 (USE_DUMMY 플래그로 Phase 2 교체 준비)
-- [x] `lib/dummyData.js` 더미 JSON 7건 생성 (의료법 5건 + 개인정보법 1건 + 근로기준법 1건)
-- [x] `.env.local.example` 파일 생성 (API 키 자리 비워두기)
-- [x] `.gitignore` 생성 (`.env.local` 커밋 방지)
-
-### 세션 2 — 홈/검색 화면 ✅ 완료
-- [x] 검색창 컴포넌트 (`app/page.js`)
-- [x] 자주 찾는 주제 버튼 자리 확보 (목록은 추후 결정)
-- [x] 최근 검색어 표시 영역 (localStorage, 최대 5개)
-
-### 세션 3 — 검색 결과 화면 ✅ 완료
-- [x] 법령 목록 리스트 뷰 (`app/search/page.js` + `components/LawCard.js`)
-- [x] 법령명 / 조문 번호 / 시행일 표시
-- [x] 조문 본문 미리보기 (100자)
-- [x] 카테고리 탭 필터 (의료법 계열 우선)
-
-### 세션 4 — 조문 상세 화면 ✅ 완료
-- [x] 조문 전문 표시 (`app/article/[id]/page.js`)
-- [x] 원문 보기 버튼 (law.go.kr 링크)
-- [x] 출처 정보 표시 (법령명, 조문번호, 시행일)
-- [x] AI 요약 버튼 (클릭 시 패널 표시)
-
-### 세션 5 — AI 요약 패널 ✅ 완료
-- [x] 요약 유형 선택 탭 (핵심 3줄 / 쉬운 설명 / 조문 비교)
-- [x] AI 답변 영역 (더미 텍스트)
-- [x] 면책 문구 고정 표시 (숨기기 불가, 황색 배경)
-
-### 세션 6 — 마무리 ✅ 완료
-- [x] `npm install` 후 로컬 실행 확인 (`npm run dev`)
-- [x] Vercel 배포 완료 — **medical-law-search.vercel.app** (Framework: Next.js로 수정 후 성공)
-- [ ] 자주 찾는 주제 버튼 목록 결정 후 추가 (Phase 4에서 처리)
 
 ---
 
 ## ✅ Phase 2 세부 작업 체크리스트
 
-### 사전 세팅
-- [x] 법제처 Open API 승인 완료 (OC: motm2014)
-- [x] Vercel 환경변수 설정 — `LAW_API_OC=motm2014`
+- [x] 법제처 Open API 승인 완료 (OC: 1234)
+- [x] Vercel 환경변수 설정 — `LAW_API_OC=1234`
+- [x] `lib/lawApi.js` — USE_DUMMY=false로 전환
+- [x] `app/api/search/route.js` 생성 — 법제처 검색 API 프록시
+- [x] `app/api/article/route.js` 생성 — 법제처 조문 상세 API 프록시
+- [x] Vercel 배포 완료 ✅
 
-### Phase 2 코드 작업 ✅ 완료
-- [x] `lib/lawApi.js` — USE_DUMMY 플래그를 `false`로 전환
-- [x] `lib/lawApi.js` — Next.js API Route (`/api/search`, `/api/article`)를 호출하도록 실제 로직 작성
-- [x] `app/api/search/route.js` 생성 — 법제처 검색 API 프록시 (서버사이드)
-  - lawSearch.do → lawService.do 2단계 호출
-  - 키워드 변환 로직 (실무 표현 → 법령 키워드)
-  - 법령당 최대 3개 조문 필터링, 우선순위 정렬
-- [x] `app/api/article/route.js` 생성 — 법제처 조문 상세 API 프록시 (서버사이드)
-  - id 형식: `{lawId}_{articleNumber}`
-  - lawService.do 호출 후 해당 조문 파싱
-- [x] 법제처 API 응답 파싱 (toArray, formatDate, 법령명 object/string 두 형식 처리)
-- [x] 에러 처리 (API 오류, 환경변수 미설정, 404 등)
-- [x] Vercel 배포 완료 (3개 커밋 모두 Ready) ✅
+---
+
+## 🔧 Phase 3 — 법제처 API 수정 (완료된 부분)
+
+- [x] Edge Runtime + preferredRegion=icn1 적용 (서울 리전)
+- [x] Vercel 환경변수 OC 수정: motm2014 → 1234
+- [x] **Referer 헤더 추가** — 법제처 도메인 검증 핵심 수정
+- [x] 법제처 서버장비 IP 등록 (13.209.43.211)
+- [ ] 주제어 검색 개선 (의료법 법령ID 하드코딩)
+- [ ] AI API 연동 (Claude/GPT 결정 후)
 
 ---
 
 ## 📝 작업 로그
 
 | 날짜 | 세션 | 한 일 | 다음 할 일 |
-|------|------|--------|-----------|
-| 2026-03-24 | - | 명령서 검토, 개발 전략 수립, PROGRESS.md 생성, ④⑥ 확정 | Phase 1 코드 작성 |
-| 2026-03-24 | Phase 1 | 전체 파일 생성 완료 (구조·더미데이터·홈·검색결과·상세·AI패널) | npm install → 로컬 실행 확인 → Vercel 배포 |
-| 2026-03-24 | Phase 1 완료 | 로컬 실행 확인 ✅ · Vercel 배포 성공 ✅ (Framework Next.js 설정 수정) | **법제처 API 승인 대기 → 승인 시 Phase 2 시작** |
-| 2026-03-25 | Phase 2 완료 | 법제처 API 승인 ✅ · lib/lawApi.js USE_DUMMY=false · /api/search·/api/article 생성 · Vercel 배포 3건 모두 Ready ✅ | **Phase 3: AI API 키 결정 후 Claude/GPT 연동** |
+|------|------|--------|-----------| 
+| 2026-03-24 | Phase 1 | UI 전체 구성 완료, Vercel 배포 성공 | Phase 2 |
+| 2026-03-25 | Phase 2 | 법제처 API 연동 완료, OC=motm2014 | Phase 3 AI 연동 |
+| 2026-03-25~26 | Phase 3 수정 | OC=1234로 수정, Referer 헤더 추가로 API 검증 해결 | 주제어 검색 개선, AI 연동 |
+
+---
+
+## 🛡️ 개발 프로젝트 꼬이지 않는 핵심 5가지
+
+1. **Git commit 자주** — 기능 하나 완성할 때마다 커밋. 되돌아갈 지점 확보
+2. **PROGRESS.md 유지** — 작업 끝날 때마다 상태 업데이트. AI에게 컨텍스트 전달용
+3. **HANDOFF.md 만들기** — "지금 어디까지 됐고 다음에 뭘 해야 하는지" 요약본
+4. **TODO는 항상 1개 작업만** — 동시에 여러 개 건드리면 반드시 꼬임
+5. **폴더 구조는 중간에 바꾸지 않기** — 처음 구조 잘 잡고 그대로 유지
 
 ---
 
 ## 🔑 기술 스택 요약
 
 ```
-Frontend:  Next.js (React) + Tailwind CSS
-Backend:   Next.js API Routes
-API:       법제처 Open API ✅ 연동 완료 (OC: motm2014)
-AI:        Claude API 또는 OpenAI API (미결정)
-Deploy:    Vercel
-Repo:      GitHub (manofthematch89/medical-law-search)
-IDE:       Cowork (Google Antigravity 만료)
+Frontend: Next.js (React) + Tailwind CSS
+Backend: Next.js API Routes (Edge Runtime, Seoul)
+API: 법제처 Open API ✅ (OC: 1234)
+AI: Claude API 또는 OpenAI API (미결정)
+Deploy: Vercel
+Repo: GitHub (manofthematch89/medical-law-search)
 ```
 
 ---
@@ -144,4 +118,4 @@ IDE:       Cowork (Google Antigravity 만료)
 
 ---
 
-*마지막 업데이트: 2026-03-25 — **Phase 2 완전 완료** (법제처 API 연동 + Vercel 배포). 다음: AI API 키 결정 후 Phase 3 시작*
+*마지막 업데이트: 2026-03-26 — Phase 3 법제처 API 수정 완료 (OC/Referer 헤더). 주제어 검색 개선 필요. AI 연동 대기 중*
