@@ -10,6 +10,13 @@ export const preferredRegion = "icn1"; // 서울
 const LAW_API_OC = process.env.LAW_API_OC || "";
 const LAW_API_BASE = "https://www.law.go.kr/DRF";
 
+// 법제처 API 호출 시 필수 헤더 (도메인 검증용)
+const LAW_API_HEADERS = {
+  "Accept": "application/json",
+  "Referer": "https://medical-law-search.vercel.app/",
+  "Origin": "https://medical-law-search.vercel.app",
+};
+
 const keywordMap = {
   "차트 보관": "진료기록부 보존기간",
   "차트 보존": "진료기록부 보존기간",
@@ -101,15 +108,11 @@ export async function GET(request) {
     const keyword = convertKeyword(query);
     const kw = keyword.toLowerCase();
 
-    const searchUrl =
-      `${LAW_API_BASE}/lawSearch.do?OC=${LAW_API_OC}&target=law&type=JSON&query=${encodeURIComponent(keyword)}&display=5&page=1`;
+    const searchUrl = `${LAW_API_BASE}/lawSearch.do?OC=${LAW_API_OC}&target=law&type=JSON&query=${encodeURIComponent(keyword)}&display=5&page=1`;
 
     let searchData;
     try {
-      const searchRes = await fetch(searchUrl, {
-        headers: { "Accept": "application/json" },
-        cf: { cacheTtl: 3600 },
-      });
+      const searchRes = await fetch(searchUrl, { headers: LAW_API_HEADERS });
       if (!searchRes.ok) throw new Error(`법제처 검색 API 오류: ${searchRes.status}`);
       searchData = await searchRes.json();
     } catch (fetchErr) {
@@ -123,7 +126,6 @@ export async function GET(request) {
     if (!lawList.length) return NextResponse.json([]);
 
     const results = [];
-
     for (const law of lawList.slice(0, 3)) {
       const lawId = String(law["법령ID"] || "");
       const rawLawName = law["법령명"] || law["법령명한글"] || "";
@@ -136,11 +138,8 @@ export async function GET(request) {
 
       let articleData;
       try {
-        const articleUrl =
-          `${LAW_API_BASE}/lawService.do?OC=${LAW_API_OC}&target=law&type=JSON&ID=${lawId}`;
-        const articleRes = await fetch(articleUrl, {
-          headers: { "Accept": "application/json" },
-        });
+        const articleUrl = `${LAW_API_BASE}/lawService.do?OC=${LAW_API_OC}&target=law&type=JSON&ID=${lawId}`;
+        const articleRes = await fetch(articleUrl, { headers: LAW_API_HEADERS });
         if (!articleRes.ok) continue;
         articleData = await articleRes.json();
       } catch (err) {
@@ -151,12 +150,10 @@ export async function GET(request) {
       const 조문 = lawBody?.조문 || lawBody?.article;
       const articles = toArray(조문?.조문단위 || 조문?.articleUnit || 조문);
 
-      // 1차: 키워드 매칭 조문
       let matched = articles
         .filter((a) => extractFullText(a).toLowerCase().includes(kw))
         .slice(0, 3);
 
-      // 2차 fallback: 키워드 매칭 없으면 첫 3개
       if (!matched.length && articles.length > 0) {
         matched = articles.slice(0, 3);
       }
