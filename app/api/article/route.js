@@ -7,7 +7,8 @@
 
 import { NextResponse } from "next/server";
 
-// 법제처 API는 한국 IP에서만 접근 가능 → 서울 리전 고정
+// Edge Runtime: Hobby 플랜에서도 서울 리전에서 실행됨
+export const runtime = "edge";
 export const preferredRegion = "icn1";
 
 const LAW_API_OC = process.env.LAW_API_OC || "";
@@ -62,7 +63,7 @@ export async function GET(request) {
     const articleNumber = id.slice(underscoreIndex + 1);
 
     const url = `${LAW_API_BASE}/lawService.do?OC=${LAW_API_OC}&target=law&type=JSON&ID=${lawId}`;
-    const res = await fetch(url, { next: { revalidate: 3600 } });
+    const res = await fetch(url, { headers: { "Accept": "application/json" } });
 
     if (!res.ok) throw new Error(`법제처 API 오류: ${res.status}`);
 
