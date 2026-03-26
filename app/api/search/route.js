@@ -1,11 +1,11 @@
 export const runtime = "edge";
 // ============================================================
-// app/api/search/route.js â ë²ì ì² ê²ì API íë¡ì (ìë²ì¬ì´ë)
+// app/api/search/route.js — 법제처 검색 API 프록시 (서버사이드)
 //
-// ì ëµ: target=law 2ë¨ê³ ê²ì (ë³ë ¬)
-//   1ë¨ê³: í¤ìë + ìë£ë² ê³ì´ ë²ë ¹ëª ê²ì â ë²ë ¹ ID ëª©ë¡
-//   2ë¨ê³: ê° ë²ë ¹ ì¡°ë¬¸ ì ì²´ fetch â í¤ìë í¬í¨ ì¡°ë¬¸ íí°
-//   â ë²ë ¹ëªì´ ìë ì¡°ë¬¸ ë³¸ë¬¸ ê¸°ì¤ ê²ì ê°ë¥
+// 전략: target=law 2단계 검색 (병렬)
+//   1단계: 키워드 + 의료법 계열 법령명 검색 → 법령 ID 목록
+//   2단계: 각 법령 조문 전체 fetch → 키워드 포함 조문 필터
+//   → 법령명이 아닌 조문 본문 기준 검색 가능
 // ============================================================
 import { NextResponse } from "next/server";
 
@@ -23,16 +23,16 @@ const FETCH_OPTS = {
 };
 
 const keywordMap = {
-  "ì°¨í¸ ë³´ê´": "ì§ë£ê¸°ë¡ë¶ ë³´ì¡´ê¸°ê°",
-  "ì°¨í¸ ë³´ì¡´": "ì§ë£ê¸°ë¡ë¶ ë³´ì¡´ê¸°ê°",
-  "ë³ì¤ í¬ê¸°": "ìë£ê¸°ê´ ìì¤ê·ê²©",
-  "ë³ì¤ ë©´ì ": "ìë£ê¸°ê´ ìì¤ê·ê²©",
-  "ë¹ê¸ì¬ ê³ ì§": "ë¹ê¸ì¬ ì§ë£ë¹ì© ê³ ì§",
-  "ë¹ê¸ì¬ ê²ì": "ë¹ê¸ì¬ ì§ë£ë¹ì© ê³ ì§",
-  "ê°ì¸ì ë³´ ì´ë": "ê°ì¸ì ë³´ ì´ë ìì²­",
-  "ê·¼ë¬´ìê°": "ê·¼ë¡ìê°",
-  "ì¤ëª ëì": "ìë£íì ì¤ëª",
-  "ìì  ëì": "ìë£íì ì¤ëª",
+  "차트 보관": "진료기록부 보존기간",
+  "차트 보존": "진료기록부 보존기간",
+  "병실 크기": "의료기관 시설규격",
+  "병실 면적": "의료기관 시설규격",
+  "비급여 고지": "비급여 진료비용 고지",
+  "비급여 게시": "비급여 진료비용 고지",
+  "개인정보 열람": "개인정보 열람 요청",
+  "근무시간": "근로시간",
+  "설명 동의": "의료행위 설명",
+  "수술 동의": "의료행위 설명",
 };
 
 function convertKeyword(query) {
@@ -51,26 +51,26 @@ function formatDate(dateStr) {
 }
 
 function getCategoryFromLawName(lawName) {
-  if (lawName.includes("ìë£ë²")) return "ìë£ë² ê³ì´";
-  if (lawName.includes("ê°ì¸ì ë³´")) return "ê°ì¸ì ë³´ë³´í¸ë²";
-  if (lawName.includes("ê·¼ë¡ê¸°ì¤")) return "ê·¼ë¡ê¸°ì¤ë²";
-  if (lawName.includes("ìê¸ìë£")) return "ìë£ë² ê³ì´";
-  if (lawName.includes("ì½ì¬ë²")) return "ìë£ë² ê³ì´";
-  return "ê¸°í";
+  if (lawName.includes("의료법")) return "의료법 계열";
+  if (lawName.includes("개인정보")) return "개인정보보호법";
+  if (lawName.includes("근로기준")) return "근로기준법";
+  if (lawName.includes("응급의료")) return "의료법 계열";
+  if (lawName.includes("약사법")) return "의료법 계열";
+  return "기타";
 }
 
 function getPriority(lawName) {
-  if (lawName.includes("ìë£ë²") || lawName.includes("ìê¸ìë£") || lawName.includes("ì½ì¬ë²")) return 1;
-  if (lawName.includes("ê°ì¸ì ë³´")) return 2;
-  if (lawName.includes("ê·¼ë¡ê¸°ì¤")) return 3;
+  if (lawName.includes("의료법") || lawName.includes("응급의료") || lawName.includes("약사법")) return 1;
+  if (lawName.includes("개인정보")) return 2;
+  if (lawName.includes("근로기준")) return 3;
   return 4;
 }
 
 function extractArticleContent(articleUnit) {
-  const main = String(articleUnit["ì¡°ë¬¸ë´ì©"] || articleUnit.ì¡°ë¬¸ë´ì© || "");
-  const subs = toArray(articleUnit["í­"] || articleUnit.í­);
+  const main = String(articleUnit["조문내용"] || articleUnit.조문내용 || "");
+  const subs = toArray(articleUnit["항"] || articleUnit.항);
   if (!subs.length) return main;
-  const subText = subs.map((s) => String(s["í­ë´ì©"] || s.í­ë´ì© || "")).filter(Boolean).join(" ");
+  const subText = subs.map((s) => String(s["항내용"] || s.항내용 || "")).filter(Boolean).join(" ");
   return main ? `${main} ${subText}` : subText;
 }
 
@@ -87,7 +87,7 @@ async function fetchArticles(lawId) {
   const res = await fetch(url, FETCH_OPTS);
   if (!res.ok) return [];
   const data = await res.json();
-  return toArray(data?.ë²ë ¹?.ì¡°ë¬¸?.ì¡°ë¬¸ë¨ì);
+  return toArray(data?.["beorieong"]?.["chomun"]?.["chomundanwi"]);
 }
 
 export async function GET(request) {
@@ -98,7 +98,7 @@ export async function GET(request) {
 
     if (!LAW_API_OC) {
       return NextResponse.json(
-        { error: "LAW_API_OC íê²½ë³ìê° ì¤ì ëì§ ìììµëë¤." },
+        { error: "LAW_API_OC �LAM_API_OC 않았습니다." },
         { status: 500 }
       );
     }
@@ -106,16 +106,14 @@ export async function GET(request) {
     const keyword = convertKeyword(query);
     const kw = keyword.toLowerCase();
 
-    // 1ë¨ê³: í¤ìë ë²ë ¹ëª ê²ì + ìë£ë² ê³ì´ í­ì í¬í¨ (ë³ë ¬)
     const [kwLaws, medLaws] = await Promise.all([
       fetchLaws(keyword, 10),
-      fetchLaws("ìë£ë²", 10),
+      fetchLaws("의료법", 10),
     ]);
 
-    // ì¤ë³µ ì ê±° (ë²ë ¹ID ê¸°ì¤)
     const seen = new Set();
     const allLaws = [...kwLaws, ...medLaws].filter((law) => {
-      const id = String(law["ë²ë ¹ID"] || "");
+      const id = String(law["법령ID"] || "");
       if (!id || seen.has(id)) return false;
       seen.add(id);
       return true;
@@ -123,35 +121,33 @@ export async function GET(request) {
 
     if (!allLaws.length) return NextResponse.json([]);
 
-    // 2ë¨ê³: ê° ë²ë ¹ ì¡°ë¬¸ ë³ë ¬ fetch (ìµë 10ê° ë²ë ¹)
     const lawsToFetch = allLaws.slice(0, 10);
     const articleBatches = await Promise.all(
       lawsToFetch.map(async (law) => {
-        const lawId = String(law["ë²ë ¹ID"] || "");
-        const lawName = String(law["ë²ë ¹ëª"] || law["ë²ë ¹ëªíê¸"] || "");
-        const effectiveDate = formatDate(law["ìíì¼ì"]);
+        const lawId = String(law["법령ID"] || "");
+        const lawName = String(law["법령명"] || law["법령명한글"] || "");
+        const effectiveDate = formatDate(law["시행일자"]);
         const articles = await fetchArticles(lawId).catch(() => []);
         return { lawId, lawName, effectiveDate, articles };
       })
     );
 
-    // 3ë¨ê³: í¤ìë í¬í¨ ì¡°ë¬¸ íí° (ì¡°ë¬¸ì ëª© or ì¡°ë¬¸ë´ì©)
     const results = [];
     for (const { lawId, lawName, effectiveDate, articles } of articleBatches) {
       for (const art of articles) {
-        const title = String(art["ì¡°ë¬¸ì ëª©"] || art.ì¡°ë¬¸ì ëª© || "").toLowerCase();
+        const title = String(art["조문제목"] || art["chomunjemok"] || "").toLowerCase();
         const content = extractArticleContent(art).toLowerCase();
-        if (!title.includes(kw) && !content.includes(kw)) continue;
+        if (!title.includes(kw) && !content-�ncludes(kw)) continue;
 
-        const articleNumber = String(art["@ì¡°ë¬¸ë²í¸"] || art["ì¡°ë¬¸ë²í¸"] || "");
+        const articleNumber = String(art["@chomunbeonho"] || art["chomunbeonho"] || "");
         const fullContent = extractArticleContent(art);
-        const summary = fullContent.length > 60 ? fullContent.slice(0, 60) + "â¦" : fullContent;
+        const summary = fullContent.length > 60 ? fullContent.slice(0, 60) + "…" : fullContent;
 
         results.push({
           id: `${lawId}_${articleNumber}`,
           lawName,
-          article: `ì ${articleNumber}ì¡°`,
-          title: String(art["ì¡°ë¬¸ì ëª©"] || art.ì¡°ë¬¸ì ëª© || ""),
+          article: `제${articleNumber}쁰,
+          title: String(art["조문제목"] || art["chomunjemok"] || ""),
           summary,
           effectiveDate,
           category: getCategoryFromLawName(lawName),
@@ -165,9 +161,9 @@ export async function GET(request) {
     results.sort((a, b) => a.priority - b.priority);
     return NextResponse.json(results.slice(0, 20));
   } catch (err) {
-    console.error("[/api/search] ì¤ë¥:", err);
+    console.error("[/api/search] 옧곀티:", err);
     return NextResponse.json(
-      { error: err.message || "ê²ì ì¤ ì¤ë¥ê° ë°ìíìµëë¤." },
+      { error: err.message || "검색 중 오륂가 뜜생했습니다." },
       { status: 500 }
     );
   }
