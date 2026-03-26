@@ -1,6 +1,4 @@
 export const runtime = "edge";
-export const preferredRegion = "icn1";
-
 // ============================================================
 // app/api/article/route.js — 법제처 조문 상세 API 프록시 (서버사이드)
 //
