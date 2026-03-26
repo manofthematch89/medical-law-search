@@ -1,18 +1,26 @@
 export const runtime = "edge";
 // ============================================================
-// app/api/search/route.js â ë²ì ì² ì¡°ë¬¸ ê²ì API íë¡ì (ìë²ì¬ì´ë)
+// app/api/search/route.js â ë²ì ì² ê²ì API íë¡ì (ìë²ì¬ì´ë)
 //
-// ì­í : ë¸ë¼ì°ì  â Next.js API Route â ë²ì ì² API
-// CORS ë¬¸ì  ìì´ ë²ì ì² APIë¥¼ ìì íê² í¸ì¶
-// target=lc ë¡ ì¡°ë¬¸ ë´ì©ì ì§ì  ê²ì (target=law ë ë²ë ¹ëª ê²ìì´ë¼ ë¶ì í©)
+// ì ëµ: target=law 2ë¨ê³ ê²ì (ë³ë ¬)
+//   1ë¨ê³: í¤ìë + ìë£ë² ê³ì´ ë²ë ¹ëª ê²ì â ë²ë ¹ ID ëª©ë¡
+//   2ë¨ê³: ê° ë²ë ¹ ì¡°ë¬¸ ì ì²´ fetch â í¤ìë í¬í¨ ì¡°ë¬¸ íí°
+//   â ë²ë ¹ëªì´ ìë ì¡°ë¬¸ ë³¸ë¬¸ ê¸°ì¤ ê²ì ê°ë¥
 // ============================================================
 import { NextResponse } from "next/server";
 
-// ë²ì ì² APIë íêµ­ IPììë§ ì ê·¼ ê°ë¥ â ìì¸ ë¦¬ì  ê³ ì 
 export const preferredRegion = "icn1";
 
 const LAW_API_OC = process.env.LAW_API_OC || "";
 const LAW_API_BASE = "https://www.law.go.kr/DRF";
+
+const FETCH_OPTS = {
+  next: { revalidate: 3600 },
+  headers: {
+    Accept: "application/json",
+    Referer: "https://medical-law-search.vercel.app/",
+  },
+};
 
 const keywordMap = {
   "ì°¨í¸ ë³´ê´": "ì§ë£ê¸°ë¡ë¶ ë³´ì¡´ê¸°ê°",
@@ -28,8 +36,7 @@ const keywordMap = {
 };
 
 function convertKeyword(query) {
-  const trimmed = query.trim();
-  return keywordMap[trimmed] || trimmed;
+  return keywordMap[query.trim()] || query.trim();
 }
 
 function toArray(val) {
@@ -59,6 +66,30 @@ function getPriority(lawName) {
   return 4;
 }
 
+function extractArticleContent(articleUnit) {
+  const main = String(articleUnit["ì¡°ë¬¸ë´ì©"] || articleUnit.ì¡°ë¬¸ë´ì© || "");
+  const subs = toArray(articleUnit["í­"] || articleUnit.í­);
+  if (!subs.length) return main;
+  const subText = subs.map((s) => String(s["í­ë´ì©"] || s.í­ë´ì© || "")).filter(Boolean).join(" ");
+  return main ? `${main} ${subText}` : subText;
+}
+
+async function fetchLaws(query, display = 10) {
+  const url = `${LAW_API_BASE}/lawSearch.do?OC=${LAW_API_OC}&target=law&type=JSON&query=${encodeURIComponent(query)}&display=${display}&page=1`;
+  const res = await fetch(url, FETCH_OPTS);
+  if (!res.ok) return [];
+  const data = await res.json();
+  return toArray(data?.LawSearch?.law);
+}
+
+async function fetchArticles(lawId) {
+  const url = `${LAW_API_BASE}/lawService.do?OC=${LAW_API_OC}&target=law&type=JSON&ID=${lawId}`;
+  const res = await fetch(url, FETCH_OPTS);
+  if (!res.ok) return [];
+  const data = await res.json();
+  return toArray(data?.ë²ë ¹?.ì¡°ë¬¸?.ì¡°ë¬¸ë¨ì);
+}
+
 export async function GET(request) {
   try {
     const { searchParams } = new URL(request.url);
@@ -73,65 +104,67 @@ export async function GET(request) {
     }
 
     const keyword = convertKeyword(query);
+    const kw = keyword.toLowerCase();
 
-    // target=lc: ì¡°ë¬¸ ë´ì© ì§ì  ê²ì (í ë²ì API í¸ì¶ë¡ ì¡°ë¬¸ ê²°ê³¼ ë°í)
-    const searchUrl = `${LAW_API_BASE}/lawSearch.do?OC=${LAW_API_OC}&target=lc&type=JSON&query=${encodeURIComponent(keyword)}&display=20&page=1`;
+    // 1ë¨ê³: í¤ìë ë²ë ¹ëª ê²ì + ìë£ë² ê³ì´ í­ì í¬í¨ (ë³ë ¬)
+    const [kwLaws, medLaws] = await Promise.all([
+      fetchLaws(keyword, 10),
+      fetchLaws("ìë£ë²", 10),
+    ]);
 
-    const searchRes = await fetch(searchUrl, {
-      next: { revalidate: 3600 },
-      headers: {
-        "Accept": "application/json",
-        "Referer": "https://medical-law-search.vercel.app/",
-      },
+    // ì¤ë³µ ì ê±° (ë²ë ¹ID ê¸°ì¤)
+    const seen = new Set();
+    const allLaws = [...kwLaws, ...medLaws].filter((law) => {
+      const id = String(law["ë²ë ¹ID"] || "");
+      if (!id || seen.has(id)) return false;
+      seen.add(id);
+      return true;
     });
 
-    if (!searchRes.ok) throw new Error(`ë²ì ì² ê²ì API ì¤ë¥: ${searchRes.status}`);
+    if (!allLaws.length) return NextResponse.json([]);
 
-    const rawText = await searchRes.text();
+    // 2ë¨ê³: ê° ë²ë ¹ ì¡°ë¬¸ ë³ë ¬ fetch (ìµë 10ê° ë²ë ¹)
+    const lawsToFetch = allLaws.slice(0, 10);
+    const articleBatches = await Promise.all(
+      lawsToFetch.map(async (law) => {
+        const lawId = String(law["ë²ë ¹ID"] || "");
+        const lawName = String(law["ë²ë ¹ëª"] || law["ë²ë ¹ëªíê¸"] || "");
+        const effectiveDate = formatDate(law["ìíì¼ì"]);
+        const articles = await fetchArticles(lawId).catch(() => []);
+        return { lawId, lawName, effectiveDate, articles };
+      })
+    );
 
-    // XML ìëµ ì²ë¦¬ (target=lc ê° type=JSON ë¬´ìíê³  XML ë°ííë ê²½ì°)
-    if (rawText.trim().startsWith("<")) {
-      return NextResponse.json({ error: "XML_RESPONSE", raw: rawText.slice(0, 500) }, { status: 500 });
+    // 3ë¨ê³: í¤ìë í¬í¨ ì¡°ë¬¸ íí° (ì¡°ë¬¸ì ëª© or ì¡°ë¬¸ë´ì©)
+    const results = [];
+    for (const { lawId, lawName, effectiveDate, articles } of articleBatches) {
+      for (const art of articles) {
+        const title = String(art["ì¡°ë¬¸ì ëª©"] || art.ì¡°ë¬¸ì ëª© || "").toLowerCase();
+        const content = extractArticleContent(art).toLowerCase();
+        if (!title.includes(kw) && !content.includes(kw)) continue;
+
+        const articleNumber = String(art["@ì¡°ë¬¸ë²í¸"] || art["ì¡°ë¬¸ë²í¸"] || "");
+        const fullContent = extractArticleContent(art);
+        const summary = fullContent.length > 60 ? fullContent.slice(0, 60) + "â¦" : fullContent;
+
+        results.push({
+          id: `${lawId}_${articleNumber}`,
+          lawName,
+          article: `ì ${articleNumber}ì¡°`,
+          title: String(art["ì¡°ë¬¸ì ëª©"] || art.ì¡°ë¬¸ì ëª© || ""),
+          summary,
+          effectiveDate,
+          category: getCategoryFromLawName(lawName),
+          content: fullContent,
+          source: `https://www.law.go.kr/lsSc.do?query=${encodeURIComponent(lawName)}`,
+          priority: getPriority(lawName),
+        });
+      }
     }
-
-    if (!rawText.trim()) {
-      return NextResponse.json({ error: "EMPTY_RESPONSE" }, { status: 500 });
-    }
-
-    const searchData = JSON.parse(rawText);
-    const articleList = toArray(searchData?.LawSearch?.law || searchData?.LcSearch?.law);
-
-    if (!articleList.length) return NextResponse.json([]);
-
-    const results = articleList.map((item) => {
-      const lawId = String(item["ë²ë ¹ID"] || "");
-      const lawName = String(item["ë²ë ¹ëªíê¸"] || item["ë²ë ¹ëª"] || "");
-      const articleNumber = String(item["ì¡°ë¬¸ë²í¸"] || item["@ì¡°ë¬¸ë²í¸"] || "");
-      const articleTitle = String(item["ì¡°ë¬¸ì ëª©"] || "");
-      const articleContent = String(item["ì¡°ë¬¸ë´ì©"] || "");
-      const effectiveDate = formatDate(item["ìíì¼ì"]);
-      const summary =
-        articleContent.length > 60
-          ? articleContent.slice(0, 60) + "â¦"
-          : articleContent;
-
-      return {
-        id: `${lawId}_${articleNumber}`,
-        lawName,
-        article: `ì ${articleNumber}ì¡°`,
-        title: articleTitle,
-        summary,
-        effectiveDate,
-        category: getCategoryFromLawName(lawName),
-        content: articleContent,
-        source: `https://www.law.go.kr/lsSc.do?query=${encodeURIComponent(lawName)}`,
-        priority: getPriority(lawName),
-      };
-    });
 
     results.sort((a, b) => a.priority - b.priority);
-    return NextResponse.json(results);
-  } catch (err) {
+    return NextResponse.json(results.slice(0, 20));
+  } catch (err) }
     console.error("[/api/search] ì¤ë¥:", err);
     return NextResponse.json(
       { error: err.message || "ê²ì ì¤ ì¤ë¥ê° ë°ìíìµëë¤." },
