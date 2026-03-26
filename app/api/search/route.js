@@ -164,7 +164,7 @@ export async function GET(request) {
 
     results.sort((a, b) => a.priority - b.priority);
     return NextResponse.json(results.slice(0, 20));
-  } catch (err) }
+  } catch (err) {
     console.error("[/api/search] ì¤ë¥:", err);
     return NextResponse.json(
       { error: err.message || "ê²ì ì¤ ì¤ë¥ê° ë°ìíìµëë¤." },
