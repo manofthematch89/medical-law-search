@@ -1,30 +1,30 @@
 export const runtime = "edge";
 // ============================================================
-// app/api/search/route.js — 법제처 검색 API 프록시 (서버사이드)
+// app/api/search/route.js â ë²ì ì² ì¡°ë¬¸ ê²ì API íë¡ì (ìë²ì¬ì´ë)
 //
-// 역할: 브라우저 → Next.js API Route → 법제처 API
-// CORS 문제 없이 법제처 API를 안전하게 호출
+// ì­í : ë¸ë¼ì°ì  â Next.js API Route â ë²ì ì² API
+// CORS ë¬¸ì  ìì´ ë²ì ì² APIë¥¼ ìì íê² í¸ì¶
+// target=lc ë¡ ì¡°ë¬¸ ë´ì©ì ì§ì  ê²ì (target=law ë ë²ë ¹ëª ê²ìì´ë¼ ë¶ì í©)
 // ============================================================
-
 import { NextResponse } from "next/server";
 
-// 법제처 API는 한국 IP에서만 접근 가능 → 서울 리전 고정
+// ë²ì ì² APIë íêµ­ IPììë§ ì ê·¼ ê°ë¥ â ìì¸ ë¦¬ì  ê³ ì 
 export const preferredRegion = "icn1";
 
 const LAW_API_OC = process.env.LAW_API_OC || "";
 const LAW_API_BASE = "https://www.law.go.kr/DRF";
 
 const keywordMap = {
-  "차트 보관": "진료기록부 보존기간",
-  "차트 보존": "진료기록부 보존기간",
-  "병실 크기": "의료기관 시설규격",
-  "병실 면적": "의료기관 시설규격",
-  "비급여 고지": "비급여 진료비용 고지",
-  "비급여 게시": "비급여 진료비용 고지",
-  "개인정보 열람": "개인정보 열람 요청",
-  "근무시간": "근로시간",
-  "설명 동의": "의료행위 설명",
-  "수술 동의": "의료행위 설명",
+  "ì°¨í¸ ë³´ê´": "ì§ë£ê¸°ë¡ë¶ ë³´ì¡´ê¸°ê°",
+  "ì°¨í¸ ë³´ì¡´": "ì§ë£ê¸°ë¡ë¶ ë³´ì¡´ê¸°ê°",
+  "ë³ì¤ í¬ê¸°": "ìë£ê¸°ê´ ìì¤ê·ê²©",
+  "ë³ì¤ ë©´ì ": "ìë£ê¸°ê´ ìì¤ê·ê²©",
+  "ë¹ê¸ì¬ ê³ ì§": "ë¹ê¸ì¬ ì§ë£ë¹ì© ê³ ì§",
+  "ë¹ê¸ì¬ ê²ì": "ë¹ê¸ì¬ ì§ë£ë¹ì© ê³ ì§",
+  "ê°ì¸ì ë³´ ì´ë": "ê°ì¸ì ë³´ ì´ë ìì²­",
+  "ê·¼ë¬´ìê°": "ê·¼ë¡ìê°",
+  "ì¤ëª ëì": "ìë£íì ì¤ëª",
+  "ìì  ëì": "ìë£íì ì¤ëª",
 };
 
 function convertKeyword(query) {
@@ -44,97 +44,87 @@ function formatDate(dateStr) {
 }
 
 function getCategoryFromLawName(lawName) {
-  if (lawName.includes("의료법")) return "의료법 계열";
-  if (lawName.includes("개인정보")) return "개인정보보호법";
-  if (lawName.includes("근로기준")) return "근로기준법";
-  if (lawName.includes("응급의료")) return "의료법 계열";
-  if (lawName.includes("약사법")) return "의료법 계열";
-  return "기타";
+  if (lawName.includes("ìë£ë²")) return "ìë£ë² ê³ì´";
+  if (lawName.includes("ê°ì¸ì ë³´")) return "ê°ì¸ì ë³´ë³´í¸ë²";
+  if (lawName.includes("ê·¼ë¡ê¸°ì¤")) return "ê·¼ë¡ê¸°ì¤ë²";
+  if (lawName.includes("ìê¸ìë£")) return "ìë£ë² ê³ì´";
+  if (lawName.includes("ì½ì¬ë²")) return "ìë£ë² ê³ì´";
+  return "ê¸°í";
 }
 
 function getPriority(lawName) {
-  if (lawName.includes("의료법") || lawName.includes("응급의료") || lawName.includes("약사법")) return 1;
-  if (lawName.includes("개인정보")) return 2;
-  if (lawName.includes("근로기준")) return 3;
+  if (lawName.includes("ìë£ë²") || lawName.includes("ìê¸ìë£") || lawName.includes("ì½ì¬ë²")) return 1;
+  if (lawName.includes("ê°ì¸ì ë³´")) return 2;
+  if (lawName.includes("ê·¼ë¡ê¸°ì¤")) return 3;
   return 4;
-}
-
-function extractArticleContent(articleUnit) {
-  const mainContent = articleUnit["조문내용"] || articleUnit.조문내용 || "";
-  const subItems = toArray(articleUnit["항"] || articleUnit.항);
-  if (!subItems.length) return mainContent;
-  const subTexts = subItems.map((item) => item["항내용"] || item.항내용 || "").filter(Boolean).join(" ");
-  return mainContent ? `${mainContent} ${subTexts}` : subTexts;
 }
 
 export async function GET(request) {
   try {
     const { searchParams } = new URL(request.url);
     const query = searchParams.get("query") || "";
-
     if (!query.trim()) return NextResponse.json([]);
 
     if (!LAW_API_OC) {
-      return NextResponse.json({ error: "LAW_API_OC 환경변수가 설정되지 않았습니다." }, { status: 500 });
+      return NextResponse.json(
+        { error: "LAW_API_OC íê²½ë³ìê° ì¤ì ëì§ ìììµëë¤." },
+        { status: 500 }
+      );
     }
 
     const keyword = convertKeyword(query);
-    const searchUrl = `${LAW_API_BASE}/lawSearch.do?OC=${LAW_API_OC}&target=law&type=JSON&query=${encodeURIComponent(keyword)}&display=5&page=1`;
-    const searchRes = await fetch(searchUrl, { next: { revalidate: 3600 }, headers: { "Accept": "application/json", "Referer": "https://medical-law-search.vercel.app/" } });
 
-    if (!searchRes.ok) throw new Error(`법제처 검색 API 오류: ${searchRes.status}`);
+    // target=lc: ì¡°ë¬¸ ë´ì© ì§ì  ê²ì (í ë²ì API í¸ì¶ë¡ ì¡°ë¬¸ ê²°ê³¼ ë°í)
+    const searchUrl = `${LAW_API_BASE}/lawSearch.do?OC=${LAW_API_OC}&target=lc&type=JSON&query=${encodeURIComponent(keyword)}&display=20&page=1`;
+
+    const searchRes = await fetch(searchUrl, {
+      next: { revalidate: 3600 },
+      headers: {
+        "Accept": "application/json",
+        "Referer": "https://medical-law-search.vercel.app/",
+      },
+    });
+
+    if (!searchRes.ok) throw new Error(`ë²ì ì² ê²ì API ì¤ë¥: ${searchRes.status}`);
 
     const searchData = await searchRes.json();
-    const lawList = toArray(searchData?.LawSearch?.law);
-    if (!lawList.length) return NextResponse.json([]);
+    const articleList = toArray(searchData?.LawSearch?.law);
 
-    const results = [];
-    const kw = keyword.toLowerCase();
+    if (!articleList.length) return NextResponse.json([]);
 
-    for (const law of lawList.slice(0, 3)) {
-      const lawId = String(law["법령ID"] || "");
-      const lawName = String(law["법령명"] || law["법령명한글"] || "");
-      const effectiveDate = formatDate(law["시행일자"]);
-      if (!lawId) continue;
+    const results = articleList.map((item) => {
+      const lawId = String(item["ë²ë ¹ID"] || "");
+      const lawName = String(item["ë²ë ¹ëªíê¸"] || item["ë²ë ¹ëª"] || "");
+      const articleNumber = String(item["ì¡°ë¬¸ë²í¸"] || item["@ì¡°ë¬¸ë²í¸"] || "");
+      const articleTitle = String(item["ì¡°ë¬¸ì ëª©"] || "");
+      const articleContent = String(item["ì¡°ë¬¸ë´ì©"] || "");
+      const effectiveDate = formatDate(item["ìíì¼ì"]);
+      const summary =
+        articleContent.length > 60
+          ? articleContent.slice(0, 60) + "â¦"
+          : articleContent;
 
-      const articleUrl = `${LAW_API_BASE}/lawService.do?OC=${LAW_API_OC}&target=law&type=JSON&ID=${lawId}`;
-      const articleRes = await fetch(articleUrl, { next: { revalidate: 3600 }, headers: { "Accept": "application/json", "Referer": "https://medical-law-search.vercel.app/" } });
-      if (!articleRes.ok) continue;
-
-      const articleData = await articleRes.json();
-      const articles = toArray(articleData?.법령?.조문?.조문단위);
-
-      const matchedArticles = articles.filter((a) => {
-        const title = String(a["조문제목"] || a.조문제목 || "").toLowerCase();
-        const content = String(a["조문내용"] || a.조문내용 || "").toLowerCase();
-        return title.includes(kw) || content.includes(kw);
-      }).slice(0, 3);
-
-      for (const art of matchedArticles) {
-        const articleNumber = String(art["@조문번호"] || art["조문번호"] || art.조문번호 || "");
-        const articleTitle = String(art["조문제목"] || art.조문제목 || "");
-        const articleContent = extractArticleContent(art);
-        const summary = articleContent.length > 60 ? articleContent.slice(0, 60) + "…" : articleContent;
-
-        results.push({
-          id: `${lawId}_${articleNumber}`,
-          lawName,
-          article: `제${articleNumber}조`,
-          title: articleTitle,
-          summary,
-          effectiveDate,
-          category: getCategoryFromLawName(lawName),
-          content: articleContent,
-          source: `https://www.law.go.kr/lsSc.do?query=${encodeURIComponent(lawName)}`,
-          priority: getPriority(lawName),
-        });
-      }
-    }
+      return {
+        id: `${lawId}_${articleNumber}`,
+        lawName,
+        article: `ì ${articleNumber}ì¡°`,
+        title: articleTitle,
+        summary,
+        effectiveDate,
+        category: getCategoryFromLawName(lawName),
+        content: articleContent,
+        source: `https://www.law.go.kr/lsSc.do?query=${encodeURIComponent(lawName)}`,
+        priority: getPriority(lawName),
+      };
+    });
 
     results.sort((a, b) => a.priority - b.priority);
     return NextResponse.json(results);
   } catch (err) {
-    console.error("[/api/search] 오류:", err);
-    return NextResponse.json({ error: err.message || "검색 중 오류가 발생했습니다." }, { status: 500 });
+    console.error("[/api/search] ì¤ë¥:", err);
+    return NextResponse.json(
+      { error: err.message || "ê²ì ì¤ ì¤ë¥ê° ë°ìíìµëë¤." },
+      { status: 500 }
+    );
   }
 }
