@@ -25,24 +25,42 @@ function formatDate(d) {
   return s.slice(0,4) + "-" + s.slice(4,6) + "-" + s.slice(6,8);
 }
 
+function lawNamePriority(lawName, query) {
+  if (lawName === query) return 0;
+  if (lawName.startsWith(query)) return 1;
+  if (lawName.includes(query)) return 2;
+  return 3;
+}
+
 export async function GET(request) {
   const { searchParams } = new URL(request.url);
   const query = searchParams.get("query")?.trim() || "";
   if (!query) return Response.json([], { status: 400 });
 
   try {
-    // 1. 법령 목록 검색
-    const searchUrl = BASE + "/lawSearch.do?OC=" + OC + "&target=law&type=JSON&query=" + encodeURIComponent(query) + "&display=10";
+    // 1. 법령 목록 검색 (display=20 으로 더 많이 가져와서 정렬)
+    const searchUrl = BASE + "/lawSearch.do?OC=" + OC + "&target=law&type=JSON&query=" + encodeURIComponent(query) + "&display=20";
     const searchRes = await fetch(searchUrl, { headers: HEADERS });
     const searchData = await searchRes.json();
 
     const laws = searchData?.LawSearch?.law;
     if (!laws) return Response.json([]);
 
-    const lawList = Array.isArray(laws) ? laws : [laws];
+    const rawList = Array.isArray(laws) ? laws : [laws];
+
+    // 2. 쿼리와 이름 일치도로 정렬 후 상위 5개 사용
+    const lawList = rawList
+      .slice()
+      .sort((a, b) => {
+        const nameA = String(a["법령명한글"] || "");
+        const nameB = String(b["법령명한글"] || "");
+        return lawNamePriority(nameA, query) - lawNamePriority(nameB, query);
+      })
+      .slice(0, 5);
+
     const allArticles = [];
 
-    for (const law of lawList.slice(0, 5)) {
+    for (const law of lawList) {
       const lawId  = String(law["법령ID"] || law.법령ID || "");
       const lawSeq = String(law["법령일련번호"] || law.법령일련번호 || "");
       const lawName = String(law["법령명한글"] || law.법령명한글 || "");
@@ -50,7 +68,7 @@ export async function GET(request) {
       if (!lawId || !lawSeq) continue;
 
       try {
-        // 2. 조문 목록 조회 (ID= 사용 — article/route.js와 동일)
+        // 3. 조문 목록 조회
         const articleUrl = BASE + "/lawService.do?OC=" + OC + "&target=law&type=JSON&ID=" + lawId;
         const articleRes = await fetch(articleUrl, { headers: HEADERS });
         const rawText = await articleRes.text();
