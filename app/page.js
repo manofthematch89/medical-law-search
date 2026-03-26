@@ -1,11 +1,12 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 
 const RECENT_SEARCHES_KEY = "mdlaw_recent";
 
 function getRecent() {
+  if (typeof window === 'undefined') return [];
   if (typeof window === "undefined") return [];
   try {
     return JSON.parse(localStorage.getItem(RECENT_SEARCHES_KEY) || "[]");
@@ -23,7 +24,8 @@ function saveRecent(query) {
 export default function HomePage() {
   const router = useRouter();
   const [query, setQuery] = useState("");
-  const [recents, setRecents] = useState(getRecent);
+  const [recents, setRecents] = useState([]);
+  useEffect(() => { setRecents(getRecent()); }, []);
 
   function handleSearch(q) {
     const trimmed = (q || query).trim();
@@ -44,16 +46,16 @@ export default function HomePage() {
 
   return (
     <div className="flex flex-col items-center gap-8 pt-8 pb-16">
-      {/* 타이틀 */}
+      {/* íì´í */}
       <div className="text-center">
-        <div className="text-5xl mb-3">⚖️</div>
+        <div className="text-5xl mb-3">âï¸</div>
         <h1 className="text-2xl font-bold text-blue-700 mb-1">MdLaw</h1>
         <p className="text-gray-500 text-sm">
-          병원 실무자를 위한 의료법령 검색 AI 탐색기
+          ë³ì ì¤ë¬´ìë¥¼ ìí ìë£ë²ë ¹ ê²ì AI íìê¸°
         </p>
       </div>
 
-      {/* 검색창 */}
+      {/* ê²ìì°½ */}
       <div className="w-full max-w-xl">
         <div className="flex gap-2 shadow-md rounded-xl overflow-hidden border border-gray-200 bg-white">
           <input
@@ -61,40 +63,40 @@ export default function HomePage() {
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             onKeyDown={handleKeyDown}
-            placeholder="예: 진료기록 보관기간, 병실 크기 기준, 비급여 고지"
+            placeholder="ì: ì§ë£ê¸°ë¡ ë³´ê´ê¸°ê°, ë³ì¤ í¬ê¸° ê¸°ì¤, ë¹ê¸ì¬ ê³ ì§"
             className="flex-1 px-4 py-3 text-sm outline-none"
           />
           <button
             onClick={() => handleSearch()}
             className="bg-blue-600 hover:bg-blue-700 text-white px-5 py-3 text-sm font-medium transition-colors"
           >
-            검색
+            ê²ì
           </button>
         </div>
         <p className="text-xs text-gray-400 mt-2 text-center">
-          실무 표현 그대로 입력하세요. 예: &quot;차트 보관&quot; → 진료기록부
-          보존기간으로 자동 변환
+          ì¤ë¬´ íí ê·¸ëë¡ ìë ¥íì¸ì. ì: &quot;ì°¨í¸ ë³´ê´&quot; â ì§ë£ê¸°ë¡ë¶
+          ë³´ì¡´ê¸°ê°ì¼ë¡ ìë ë³í
         </p>
       </div>
 
-      {/* 자주 찾는 주제 — 추후 버튼 추가 예정 */}
+      {/* ìì£¼ ì°¾ë ì£¼ì  â ì¶í ë²í¼ ì¶ê° ìì  */}
       <div className="w-full max-w-xl">
-        <p className="text-xs text-gray-400 mb-2 font-medium">자주 찾는 주제</p>
+        <p className="text-xs text-gray-400 mb-2 font-medium">ìì£¼ ì°¾ë ì£¼ì </p>
         <div className="bg-white border border-dashed border-gray-300 rounded-xl p-4 text-center text-sm text-gray-400">
-          주제 버튼은 추후 추가 예정입니다
+          ì£¼ì  ë²í¼ì ì¶í ì¶ê° ìì ìëë¤
         </div>
       </div>
 
-      {/* 최근 검색어 */}
+      {/* ìµê·¼ ê²ìì´ */}
       {recents.length > 0 && (
         <div className="w-full max-w-xl">
           <div className="flex justify-between items-center mb-2">
-            <p className="text-xs text-gray-400 font-medium">최근 검색어</p>
+            <p className="text-xs text-gray-400 font-medium">ìµê·¼ ê²ìì´</p>
             <button
               onClick={clearRecent}
               className="text-xs text-gray-400 hover:text-gray-600"
             >
-              전체 삭제
+              ì ì²´ ì­ì 
             </button>
           </div>
           <div className="flex flex-wrap gap-2">
