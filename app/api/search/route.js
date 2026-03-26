@@ -1,6 +1,7 @@
 // Phase 2 + Essential Fixes
 // - Edge Runtime (서울 IP 고정)
 // - Referer 헤더 (법제처 도메인 인증 필수)
+// - Fix: target=law + MST=법령일련번호 (was lsEfInfoR + 법령ID)
 export const runtime = "edge";
 export const preferredRegion = "icn1";
 
@@ -39,12 +40,13 @@ export async function GET(request) {
     // Step 2: 각 법령의 조문 가져오기
     const allArticles = [];
     for (const law of lawList.slice(0, 5)) {
-      const lawId = law.법령ID;
+      // 법령일련번호(MST)를 사용해야 함 — 법령ID(002019 형식)는 lawService 조회 불가
+      const lawSeq = law.법령일련번호;
       const lawName = law.법령명한글;
-      if (!lawId) continue;
+      if (!lawSeq) continue;
 
       try {
-        const articleUrl = `${BASE}/lawService.do?OC=${OC}&target=lsEfInfoR&type=JSON&ID=${lawId}`;
+        const articleUrl = `${BASE}/lawService.do?OC=${OC}&target=law&type=JSON&MST=${lawSeq}`;
         const articleRes = await fetch(articleUrl, { headers: LAW_HEADERS });
         const articleData = await articleRes.json();
 
@@ -64,7 +66,7 @@ export async function GET(request) {
 
           allArticles.push({
             lawName,
-            lawId,
+            lawId: lawSeq,
             articleTitle: title,
             articleNumber: article.조문번호 || "",
             content,
