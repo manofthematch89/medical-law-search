@@ -11,35 +11,26 @@ const LAW_HEADERS = {
 
 export async function GET() {
   try {
-    // 1. lawSearch 원본 응답
     const searchUrl = BASE + "/lawSearch.do?OC=" + OC + "&target=law&type=JSON&query=" + encodeURIComponent("의료법") + "&display=3";
     const searchRes = await fetch(searchUrl, { headers: LAW_HEADERS });
-    const searchRaw = await searchRes.text();
-    const searchData = JSON.parse(searchRaw);
+    const status = searchRes.status;
+    const rawText = await searchRes.text();
 
-    const laws = searchData?.LawSearch?.law;
-    const lawList = !laws ? [] : Array.isArray(laws) ? laws : [laws];
-    const firstLaw = lawList[0] || null;
-
-    // 2. 첫 법령의 lawService 원본 응답 (있으면)
-    let serviceData = null;
-    if (firstLaw) {
-      const lawId = firstLaw["법령ID"] || firstLaw.lawId || firstLaw.MST || Object.values(firstLaw)[0];
-      const serviceUrl = BASE + "/lawService.do?OC=" + OC + "&target=lsEfInfoR&type=JSON&ID=" + lawId;
-      const serviceRes = await fetch(serviceUrl, { headers: LAW_HEADERS });
-      serviceData = await serviceRes.json();
-    }
+    // Try to parse
+    let parsed = null;
+    let parseError = null;
+    try { parsed = JSON.parse(rawText); } catch(e) { parseError = e.message; }
 
     return Response.json({
-      searchKeys: searchData ? Object.keys(searchData) : null,
-      lawSearchKeys: searchData?.LawSearch ? Object.keys(searchData.LawSearch) : null,
-      lawCount: lawList.length,
-      firstLawKeys: firstLaw ? Object.keys(firstLaw) : null,
-      firstLawValues: firstLaw,
-      serviceKeys: serviceData ? Object.keys(serviceData) : null,
-      lawServiceKeys: serviceData?.LawService ? Object.keys(serviceData.LawService) : null,
+      httpStatus: status,
+      rawLength: rawText.length,
+      rawFirst500: rawText.substring(0, 500),
+      parseError,
+      topKeys: parsed ? Object.keys(parsed) : null,
+      lawSearchKeys: parsed?.LawSearch ? Object.keys(parsed.LawSearch) : null,
+      lawCount: parsed?.LawSearch?.law ? (Array.isArray(parsed.LawSearch.law) ? parsed.LawSearch.law.length : 1) : 0,
     });
   } catch (e) {
-    return Response.json({ error: e.message, stack: e.stack?.substring(0, 200) });
+    return Response.json({ fatalError: e.message });
   }
 }
