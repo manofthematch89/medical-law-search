@@ -87,8 +87,19 @@ export async function GET(request) {
 
     if (!searchRes.ok) throw new Error(`ë²ì ì² ê²ì API ì¤ë¥: ${searchRes.status}`);
 
-    const searchData = await searchRes.json();
-    const articleList = toArray(searchData?.LawSearch?.law);
+    const rawText = await searchRes.text();
+
+    // XML ìëµ ì²ë¦¬ (target=lc ê° type=JSON ë¬´ìíê³  XML ë°ííë ê²½ì°)
+    if (rawText.trim().startsWith("<")) {
+      return NextResponse.json({ error: "XML_RESPONSE", raw: rawText.slice(0, 500) }, { status: 500 });
+    }
+
+    if (!rawText.trim()) {
+      return NextResponse.json({ error: "EMPTY_RESPONSE" }, { status: 500 });
+    }
+
+    const searchData = JSON.parse(rawText);
+    const articleList = toArray(searchData?.LawSearch?.law || searchData?.LcSearch?.law);
 
     if (!articleList.length) return NextResponse.json([]);
 
