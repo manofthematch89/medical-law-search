@@ -1,117 +1,42 @@
-# 🏥 MdLaw — 의료법령 검색 AI 탐색기 개발 진행 현황
+# MdLaw 진행 상황
 
-> 이 파일은 AI와 작업할 때마다 업데이트하세요.
-> 새 대화 시작 시 이 파일을 공유하면 이전 맥락을 바로 이어받을 수 있습니다.
+## 최근 수정 (2026-03-26)
 
----
+### 수정된 버그 - app/api/search/route.js
 
-## 📌 프로젝트 기본 정보
+#### 1. /article/undefined 링크 문제 - 수정 완료
+- **원인**: search/route.js가 LawCard.js가 기대하는 id 필드 대신 lawId 를 반환
+- **수정**: id = 법령ID + "_" + 조문번호 형식으로 반환 (article/route.js와 동일)
+- **결과**: 상세 보기 링크가 /article/001788_1 형식으로 정상 작동
 
-| 항목 | 내용 |
-|------|------|
-| 앱 이름 | **MdLaw** |
-| 프로젝트명 | 의료법령 검색 AI 탐색기 |
-| 플랫폼 | 웹 (React / Next.js) |
-| 배포 | Vercel — medical-law-search.vercel.app |
-| 저장소 | GitHub — manofthematch89/medical-law-search |
-| 법제처 API | 완전 작동 (OC: 1234, IP: 13.209.43.211 등록) |
-| AI API | 미결정 (Claude API 또는 OpenAI API) |
+#### 2. 원문 링크 없는 문제 - 수정 완료
+- **원인**: search/route.js가 source 필드를 반환하지 않음
+- **수정**: source: "https://www.law.go.kr/lsInfo.do?lsiSeq=" + 법령일련번호 추가
+- **결과**: 원문 링크가 법제처로 정상 연결
 
----
+#### 3. 잘못된 필드명 - 수정 완료
+- **원인**: articleTitle, articleNumber 등 LawCard.js가 기대하지 않는 이름으로 반환
+- **수정**: title, article: '제X조', category, effectiveDate, summary 올바른 필드명으로 통일
 
-## 🔑 법제처 API 핵심 (반드시 기억)
+#### 4. 검색 결과에 해당 법령 안 나오는 문제 - 수정 완료
+- **원인**: display=10에서 상위 5개만 사용, 정렬 없이 API 순서 그대로 사용
+- **수정**: display=20으로 확장 후 검색어와 정확히 일치하는 법령명 우선 정렬
+- **결과**: 의료법 검색 시 의료법, 의료법 시행령, 의료법 시행규칙이 최상단 (총 433개)
 
-- 모든 요청에 Referer 헤더 필수: https://medical-law-search.vercel.app/
-  - 없으면 "사용자 정보 검증에 실패하였습니다." 오류
-- Edge Runtime 필수: export const runtime = "edge" + export const preferredRegion = "icn1"
-  - 서울 IP(13.209.43.211)로만 법제처 IP 인증 통과
-- 환경 변수: LAW_API_OC=1234 (Vercel에 설정됨)
-- lawService.do?type=JSON 응답의 최상위 키는 한국어 (예: 법령), 영문 LawService 아님
-  - 반드시 Object.values(articleData)[0] 으로 동적 접근
+#### 5. 한국어 최상위 JSON 키 대응 - 수정 완료 (이전 세션)
+- **원인**: lawService.do?type=JSON 응답 최상위 키가 한국어 '법령'으로 반환됨
+- **수정**: Object.values(articleData)[0] 로 동적 접근
 
 ---
 
-## 📋 현재 상태 (2026-03-26 기준)
+## 현재 앱 상태 (검증 완료)
 
-### 완료된 것
+- 검색: 의료법 입력 시 의료법 자체가 첫 번째 결과 표시 ✅
+- 상세 보기: /article/{lawId}_{articleNumber} 형식으로 정상 라우팅 ✅
+- 원문: https://www.law.go.kr/lsInfo.do?lsiSeq=... 정상 링크 ✅
+- 필드: id, lawName, article, title, summary, content, source, category, effectiveDate 모두 정상 ✅
 
-- 법제처 API 인증 완전 해결 (OC=1234 + Referer 헤더 + Edge Runtime)
-- 검색 기능 완전 작동 — /api/search?query=의료법 에서 실제 조문 반환 확인
-- 한국어 최상위 키 버그 수정 — Object.values(articleData)[0] 동적 접근으로 해결 (commit 7af212a)
-- 메인 페이지 한글 깨짐 수정 — atob() 방식에서 TextDecoder 방식으로 수정 (commit aac1060)
-- debug route 중복 export 오류 수정 (빌드 실패 원인 제거)
+## 커밋 이력
 
-### 🔧 다음 작업 (Phase 3)
-
-- 주제어 검색 미지원: "진료기록부" 같은 키워드 검색 시 결과 0개
-  - 원인: lawSearch.do는 법령명만 검색 (조문 내용 검색 불가)
-  - 해결 방향: 의료법 관련 법령 ID 하드코딩 → 조문 직접 검색
-- AI 요약 기능 미구현 (Claude API 또는 OpenAI API 연동 예정)
-
----
-
-## 🗺️ 전체 개발 단계 (Phase)
-
-| Phase | 명칭 | 상태 |
-|-------|------|------|
-| Phase 1 | MVP (더미 642데이터) | 완료 |
-| Phase 2 | API 연동 | 완료 |
-| Phase 3 | AI 연동 + 검색 개선 | 진행 중 |
-| Phase 4 | 고도화 (즐겨찾기 등) | 대기 중 |
-
----
-
-## 🗂️ 핵심 파일
-
-| 파일 | 역할 | 상태 |
-|------|------|------|
-| app/api/search/route.js | 법제처 API 검색 로직 | 정상 snote |
-| app/api/debug/route.js | API 연결 테스트횩 | 젥상 (좭제 가능) |
-| app/page.js | 메인 검색 UI | 젥상 |
-| PROGRESS.md | 이 파일 | 최신 |
-| HANDOFF.md | AI 인수인계 가이하 | 최신 |
-
----
-
-## 📅 작동 작업
-
-### 2026-03-26 (세션 3)
-- lawService.do?type=JSON 최상위 키� 한국어임을 PowerShell로 확인
-- Object.values(articleData)[0] 동적 접근으로 검색 수정 (commit 7af212a)
-- debug route 중��� export 제거 — 빌드 실패 최거
-- /api/search?query=의료범 실제 조문 발환 확인 완료
-
-### 2026-03-26 (세션 2)
-- Phase 3짐섄 망가 검색 기능 확인
-- Phase 3 코드 롤백: route.js 161�$ → 84줄 (Phase 2 순수 로질 로직 복원)
-- 메인 페이지 한글 깨짐 수정: atob() → TextDecoder (commit aac1060)
-- target=lsEfInfoR (집행 메타데이터) → target=law + MST=법령일련번호 로 수정
-
-### 2026-03-25
-- 법제처 API 사용자 정보 검증에 실패 원인 파악
-- Referer 헤더 누락이 핵심 원인으로 확인
-- OC=1234, Referer 헤더, Edge Runtime(서울 IP) 모두 적용
-- HANDOFF.md 최초 생성
-
----
-
-## 🛡️ 개발 꼬임 방지 5가지 원칙
-
-1. Git commit 자주 — 기능 하나 완성할 때마다 커밋
-2. PROGRESS.md 유지 — 작업 끝날 때마다 상태 업데이트
-3. HANDOFF.md 만들기 — 새 AI도 바로 파악할 수 있게
-4. TODO는 1개 작업만 — 1개 완성 후 다음
-5. 폴더 구조 중간에 바꾸지 않기 — import 경로 전체 수정 필요
-
----
-
-마지막 업데이트: 2026-03-26 — 검색 완전 작동 확인. 주제어 검색 개선 및 AI 연동 대기 중
-
----
-
-## 2026-03-26 세션 3 업데이트
-
-- 검색 기능 완전 작동 확인: /api/search?query=의료법 → 실제 조문 반환
-- Object.values(articleData)[0] 동적 키 접근으로 lawService.do JSON 파싱 수정 (commit 7af212a)
-- debug route 중복 export 제거 (빌드 오류 해결)
-- 메인 페이지 한글 깨짐 수정: atob → TextDecoder (commit aac1060)
+- Fix: search/route.js - correct field names (id, source, category) for LawCard
+- Fix: prioritize exact law name match in search results
