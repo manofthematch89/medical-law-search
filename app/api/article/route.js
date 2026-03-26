@@ -65,7 +65,7 @@ export async function GET(request) {
     const articleNumber = id.slice(underscoreIndex + 1);
 
     const url = `${LAW_API_BASE}/lawService.do?OC=${LAW_API_OC}&target=law&type=JSON&ID=${lawId}`;
-    const res = await fetch(url, { next: { revalidate: 3600 } });
+    const res = await fetch(url, { next: { revalidate: 3600 }, headers: { "Accept": "application/json", "Referer": "https://medical-law-search.vercel.app/" } });
 
     if (!res.ok) throw new Error(`법제처 API 오류: ${res.status}`);
 
