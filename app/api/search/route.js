@@ -1,29 +1,39 @@
-// Phase 2 + Essential Fixes
-// - Edge Runtime (서울 IP 고정)
-// - Referer 헤더 (법제처 도메인 인증 필수)
-// - Fix: use dynamic top-level key for lawService JSON response
 export const runtime = "edge";
 export const preferredRegion = "icn1";
 
 const OC = process.env.LAW_API_OC || "1234";
 const BASE = "https://www.law.go.kr/DRF";
 
-const LAW_HEADERS = {
+const HEADERS = {
   "Accept": "application/json",
   "Referer": "https://medical-law-search.vercel.app/",
   "Origin": "https://medical-law-search.vercel.app",
 };
 
+function getCategoryFromLawName(name) {
+  if (!name) return "기타";
+  if (name.includes("의료법") || name.includes("보건의료") || name.includes("응급의료") || name.includes("약사법") || name.includes("의원") || name.includes("병원")) return "의료법 계열";
+  if (name.includes("개인정보")) return "개인정보보호법";
+  if (name.includes("근로기준")) return "근로기준법";
+  return "기타";
+}
+
+function formatDate(d) {
+  if (!d) return "";
+  const s = String(d);
+  if (s.length !== 8) return s;
+  return s.slice(0,4) + "-" + s.slice(4,6) + "-" + s.slice(6,8);
+}
+
 export async function GET(request) {
   const { searchParams } = new URL(request.url);
   const query = searchParams.get("query")?.trim() || "";
-  const keyword = searchParams.get("keyword")?.trim() || "";
-
   if (!query) return Response.json([], { status: 400 });
 
   try {
-    const searchUrl = `${BASE}/lawSearch.do?OC=${OC}&target=law&type=JSON&query=${encodeURIComponent(query)}&display=10`;
-    const searchRes = await fetch(searchUrl, { headers: LAW_HEADERS });
+    // 1. 법령 목록 검색
+    const searchUrl = BASE + "/lawSearch.do?OC=" + OC + "&target=law&type=JSON&query=" + encodeURIComponent(query) + "&display=10";
+    const searchRes = await fetch(searchUrl, { headers: HEADERS });
     const searchData = await searchRes.json();
 
     const laws = searchData?.LawSearch?.law;
@@ -33,43 +43,50 @@ export async function GET(request) {
     const allArticles = [];
 
     for (const law of lawList.slice(0, 5)) {
-      const lawSeq = law.법령일련번호;
-      const lawName = law.법령명한글;
-      if (!lawSeq) continue;
+      const lawId  = String(law["법령ID"] || law.법령ID || "");
+      const lawSeq = String(law["법령일련번호"] || law.법령일련번호 || "");
+      const lawName = String(law["법령명한글"] || law.법령명한글 || "");
+      const effectiveDate = formatDate(law["시행일자"] || law.시행일자);
+      if (!lawId || !lawSeq) continue;
 
       try {
-        const articleUrl = `${BASE}/lawService.do?OC=${OC}&target=law&type=JSON&MST=${lawSeq}`;
-        const articleRes = await fetch(articleUrl, { headers: LAW_HEADERS });
+        // 2. 조문 목록 조회 (ID= 사용 — article/route.js와 동일)
+        const articleUrl = BASE + "/lawService.do?OC=" + OC + "&target=law&type=JSON&ID=" + lawId;
+        const articleRes = await fetch(articleUrl, { headers: HEADERS });
         const rawText = await articleRes.text();
-
         let articleData;
         try { articleData = JSON.parse(rawText); } catch(e) { continue; }
 
-        // lawService.do returns Korean top-level key (e.g. "법령"), not "LawService"
-        // Use dynamic access: get first top-level value regardless of key name
+        // 최상위 키가 한국어 (예: "법령") 이므로 동적 접근
         const lawContent = Object.values(articleData)[0];
-
-        // Articles may be at different nesting levels
         const articles =
           lawContent?.조문단위 ||
           lawContent?.조문?.조문단위 ||
-          lawContent?.조문 ||
-          articleData?.LawService?.조문단위;
+          lawContent?.조문;
 
         if (!articles) continue;
-
         const articleList = Array.isArray(articles) ? articles : [articles];
 
-        for (const article of articleList) {
-          const title = article.조문제목 || "";
-          const content = article.조문내용 || "";
-          if (keyword && !title.includes(keyword) && !content.includes(keyword)) continue;
+        for (const art of articleList) {
+          const articleNumber = String(art["조문번호"] || art.조문번호 || "");
+          const title   = String(art["조문제목"] || art.조문제목 || "");
+          const content = String(art["조문내용"] || art.조문내용 || "");
+          if (!articleNumber || !content) continue;
+
+          const id = lawId + "_" + articleNumber;
+          const summary = content.length > 80 ? content.slice(0, 80) + "…" : content;
+
           allArticles.push({
+            id,
             lawName,
-            lawId: lawSeq,
-            articleTitle: title,
-            articleNumber: article.조문번호 || "",
+            lawId,
+            article: "제" + articleNumber + "조",
+            title,
+            summary,
+            effectiveDate,
+            category: getCategoryFromLawName(lawName),
             content,
+            source: "https://www.law.go.kr/lsInfo.do?lsiSeq=" + lawSeq,
           });
         }
       } catch (e) {
