@@ -82,7 +82,7 @@ export async function GET(request) {
 
     const keyword = convertKeyword(query);
     const searchUrl = `${LAW_API_BASE}/lawSearch.do?OC=${LAW_API_OC}&target=law&type=JSON&query=${encodeURIComponent(keyword)}&display=5&page=1`;
-    const searchRes = await fetch(searchUrl, { next: { revalidate: 3600 } });
+    const searchRes = await fetch(searchUrl, { next: { revalidate: 3600 }, headers: { "Accept": "application/json", "Referer": "https://medical-law-search.vercel.app/" } });
 
     if (!searchRes.ok) throw new Error(`법제처 검색 API 오류: ${searchRes.status}`);
 
@@ -100,7 +100,7 @@ export async function GET(request) {
       if (!lawId) continue;
 
       const articleUrl = `${LAW_API_BASE}/lawService.do?OC=${LAW_API_OC}&target=law&type=JSON&ID=${lawId}`;
-      const articleRes = await fetch(articleUrl, { next: { revalidate: 3600 } });
+      const articleRes = await fetch(articleUrl, { next: { revalidate: 3600 }, headers: { "Accept": "application/json", "Referer": "https://medical-law-search.vercel.app/" } });
       if (!articleRes.ok) continue;
 
       const articleData = await articleRes.json();
