@@ -1,6 +1,4 @@
 export const runtime = "edge";
-export const preferredRegion = "icn1";
-
 // ============================================================
 // app/api/search/route.js — 법제처 검색 API 프록시 (서버사이드)
 //
