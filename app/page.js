@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { useRouter } from "next/navigation";
 
 const RECENT_SEARCHES_KEY = "mdlaw_recent";
@@ -23,8 +23,7 @@ function saveRecent(query) {
 export default function HomePage() {
   const router = useRouter();
   const [query, setQuery] = useState("");
-  const [recents, setRecents] = useState([]);
-  useEffect(() => { setRecents(getRecent()); }, []);
+  const [recents, setRecents] = useState(getRecent);
 
   function handleSearch(q) {
     const trimmed = (q || query).trim();
