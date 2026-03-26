@@ -1,32 +1,45 @@
-import { NextResponse } from "next/server";
 export const runtime = "edge";
 export const preferredRegion = "icn1";
 
-const H = {
+const OC = process.env.LAW_API_OC || "1234";
+const BASE = "https://www.law.go.kr/DRF";
+const LAW_HEADERS = {
   "Accept": "application/json",
   "Referer": "https://medical-law-search.vercel.app/",
   "Origin": "https://medical-law-search.vercel.app",
 };
 
 export async function GET() {
-  const oc = process.env.LAW_API_OC || "";
-  const base = "https://www.law.go.kr/DRF";
-  const result = {};
-
   try {
-    const r = await fetch("https://api.ipify.org?format=json");
-    const d = await r.json();
-    result.outgoing_ip = d.ip;
-  } catch(e) { result.outgoing_ip = "error"; }
+    // 1. lawSearch 원본 응답
+    const searchUrl = BASE + "/lawSearch.do?OC=" + OC + "&target=law&type=JSON&query=" + encodeURIComponent("의료법") + "&display=3";
+    const searchRes = await fetch(searchUrl, { headers: LAW_HEADERS });
+    const searchRaw = await searchRes.text();
+    const searchData = JSON.parse(searchRaw);
 
-  // 의료법 검색 — 법령ID 목록 확인
-  try {
-    const r = await fetch(`${base}/lawSearch.do?OC=${oc}&target=law&type=JSON&query=%EC%9D%98%EB%A3%8C%EB%B2%95&display=15`, { headers: H });
-    const d = await r.json();
-    const laws = Array.isArray(d?.LawSearch?.law) ? d.LawSearch.law : [d?.LawSearch?.law].filter(Boolean);
-    result.law_total = d?.LawSearch?.totalCnt;
-    result.laws = laws.map(l => ({ id: l["법령ID"], name: String(l["법령명"] || l["법령명한글"] || "") }));
-  } catch(e) { result.law_error = e.message; }
+    const laws = searchData?.LawSearch?.law;
+    const lawList = !laws ? [] : Array.isArray(laws) ? laws : [laws];
+    const firstLaw = lawList[0] || null;
 
-  return NextResponse.json(result);
+    // 2. 첫 법령의 lawService 원본 응답 (있으면)
+    let serviceData = null;
+    if (firstLaw) {
+      const lawId = firstLaw["법령ID"] || firstLaw.lawId || firstLaw.MST || Object.values(firstLaw)[0];
+      const serviceUrl = BASE + "/lawService.do?OC=" + OC + "&target=lsEfInfoR&type=JSON&ID=" + lawId;
+      const serviceRes = await fetch(serviceUrl, { headers: LAW_HEADERS });
+      serviceData = await serviceRes.json();
+    }
+
+    return Response.json({
+      searchKeys: searchData ? Object.keys(searchData) : null,
+      lawSearchKeys: searchData?.LawSearch ? Object.keys(searchData.LawSearch) : null,
+      lawCount: lawList.length,
+      firstLawKeys: firstLaw ? Object.keys(firstLaw) : null,
+      firstLawValues: firstLaw,
+      serviceKeys: serviceData ? Object.keys(serviceData) : null,
+      lawServiceKeys: serviceData?.LawService ? Object.keys(serviceData.LawService) : null,
+    });
+  } catch (e) {
+    return Response.json({ error: e.message, stack: e.stack?.substring(0, 200) });
+  }
 }
