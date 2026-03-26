@@ -190,3 +190,29 @@ URL: https://medical-law-search.vercel.app
 ---
 
 *마지막 업데이트: 2026-03-26*
+
+
+---
+
+## 2026-03-26 세션 3 — 검색 기능 완전 수정 완료
+
+### 해결된 핵심 버그
+
+1. lawService.do?type=JSON 최상위 키가 한국어 (법령) 임을 확인
+   - articleData.LawService.조문단위 는 항상 undefined 반환
+   - 수정: Object.values(articleData)[0] 으로 동적 접근 (commit 7af212a)
+
+2. debug route 중복 export 오류 (commit 6ca234d) → 수정 완료
+   - export const runtime, const OC, export async function GET 모두 2번씩 선언됨
+   - 빌드 실패 원인 → 중복 제거 후 정상 빌드
+
+### 현재 작동 확인
+
+- /api/search?query=의료법 → 실제 조문 배열 반환 (공공보건의료법, 군보건의료법 등)
+- /api/search?query=의료법&keyword=진료 → keyword 필터 정상 작동
+
+### 다음 작업
+
+- 주제어 검색 (예: 진료기록부 → 관련 조문 반환): lawSearch.do는 법령명만 검색
+  - 해결 방향: 주요 의료법 법령 ID 하드코딩 후 조문 직접 검색
+- AI 요약 기능: Claude API 또는 OpenAI API 연동
