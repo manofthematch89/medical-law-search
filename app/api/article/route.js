@@ -7,10 +7,6 @@
 
 import { NextResponse } from "next/server";
 
-// Edge Runtime: Hobby 플랜에서도 서울 리전에서 실행됨
-export const runtime = "edge";
-export const preferredRegion = "icn1";
-
 const LAW_API_OC = process.env.LAW_API_OC || "";
 const LAW_API_BASE = "https://www.law.go.kr/DRF";
 
@@ -63,7 +59,7 @@ export async function GET(request) {
     const articleNumber = id.slice(underscoreIndex + 1);
 
     const url = `${LAW_API_BASE}/lawService.do?OC=${LAW_API_OC}&target=law&type=JSON&ID=${lawId}`;
-    const res = await fetch(url, { headers: { "Accept": "application/json" } });
+    const res = await fetch(url, { next: { revalidate: 3600 } });
 
     if (!res.ok) throw new Error(`법제처 API 오류: ${res.status}`);
 
