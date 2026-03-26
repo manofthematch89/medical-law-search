@@ -16,10 +16,11 @@ const LAW_HEADERS = {
 export async function GET(request) {
   const { searchParams } = new URL(request.url);
   const query = searchParams.get("query")?.trim() || "";
-  const keyword = searchParams.get("keyword")?.trim() || query;
+  // keyword는 별도로 넘어올 때만 필터링에 사용 (없으면 전체 조문 반환)
+  const keyword = searchParams.get("keyword")?.trim() || "";
 
   if (!query) {
-    return Response.json({ error: "검색어를 입력해주세요." }, { status: 400 });
+    return Response.json([], { status: 400 });
   }
 
   try {
@@ -29,8 +30,8 @@ export async function GET(request) {
     const searchData = await searchRes.json();
 
     const laws = searchData?.LawSearch?.law;
-    if (!laws || laws.length === 0) {
-      return Response.json({ results: [], message: "검색된 법령이 없습니다." });
+    if (!laws) {
+      return Response.json([]);
     }
 
     const lawList = Array.isArray(laws) ? laws : [laws];
@@ -52,29 +53,30 @@ export async function GET(request) {
 
         const articleList = Array.isArray(articles) ? articles : [articles];
 
-        // Step 3: keyword로 조문 필터링
-        const filtered = articleList.filter(article => {
+        for (const article of articleList) {
           const title = article.조문제목 || "";
           const content = article.조문내용 || "";
-          return title.includes(keyword) || content.includes(keyword);
-        });
 
-        for (const article of filtered) {
+          // keyword가 있을 때만 필터링, 없으면 전체 반환
+          if (keyword && !title.includes(keyword) && !content.includes(keyword)) {
+            continue;
+          }
+
           allArticles.push({
             lawName,
             lawId,
-            articleTitle: article.조문제목 || "",
+            articleTitle: title,
             articleNumber: article.조문번호 || "",
-            content: article.조문내용 || "",
+            content,
           });
         }
       } catch (e) {
-        // 개별 법령 오류는 건너뜀
         continue;
       }
     }
 
-    return Response.json({ results: allArticles, total: allArticles.length });
+    // 배열 직접 반환 (search/page.js 호환)
+    return Response.json(allArticles);
   } catch (error) {
     return Response.json(
       { error: "검색 중 오류가 발생했습니다.", detail: error.message },
