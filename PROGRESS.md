@@ -1,42 +1,91 @@
 # MdLaw 진행 상황
 
-## 최근 수정 (2026-03-26)
+---
 
-### 수정된 버그 - app/api/search/route.js
+## ✅ 오늘 완료 (2026-03-27)
 
-#### 1. /article/undefined 링크 문제 - 수정 완료
+### 검색 API 구조 전면 교체 — app/api/search/route.js
+
+#### 문제: target=law는 법령명 검색이라 일반 키워드에 무용지물
+- "침대", "병실", "제출 기한" 등 일반 키워드 → 결과 0건
+- 기존 구조: 법령명 검색 → 상위 3개 법령 → 각 조문 재검색 (최대 9건)
+- `target=lc` (조문 직접 검색) 시도 → Vercel에서 EMPTY_RESPONSE (미지원)
+
+#### 해결: 2단계 병렬 검색으로 교체
+```
+1단계: fetchLaws(keyword) + fetchLaws("의료법") — 병렬 실행
+       → 중복 제거 (법령ID 기준)
+2단계: 최대 10개 법령 조문 전체 fetch — 병렬 실행
+       → 문제 포함 조문 필터 (제목 OR 본문)
+최종:  우선순위 정렬 → 최대 20건 반환
+```
+- 어떤 키워드에도 의료법 계열 항상 포함됨
+
+#### UTF-8 인코딩 버그 수정
+- `atob()`는 Latin-1 디코딩 → 한글 깨짐 → 빌드 5회 연속 실패 원인
+- `new TextDecoder('utf-8').decode(Uint8Array.from(atob(b64), c => c.charCodeAt(0)))` 로 수정
+
+#### keywordMap 확장 (일반어 → 법령 용어)
+| 입력 키워드 | 법령 용어 | 비고 |
+|---|---|---|
+| 침대 | 병상 | 법령에서 "병상" 사용 |
+| 병실 | 병상 | 법령에서 "병상" 사용 |
+| 제출 기한 / 마감일 | 기한 | 조문 내 실제 단어 |
+| 응급실 | 응급의료 | |
+| 구급차 | 구급차등의 운용 | |
+| 설명 동의 / 수술 동의 | 의료행위 설명 | |
+
+#### 검색 결과 확인 (4개 대표 키워드)
+| 키워드 | 결과 | 대표 조문 |
+|---|---|---|
+| 침대 | 8건 ✅ | 응급의료에 관한 법률 / 권역응급의료센터의 지정 |
+| 병실 | 8건 ✅ | 응급의료에 관한 법률 / 예비병상의 확보 |
+| 진료 | 20건 ✅ | 고엽제후유의증 등 환자지원 법률 |
+| 제출 기한 | 2건 ✅ | 응급의료에 관한 법률 / 미수금의 대지급 |
+
+#### 최종 배포
+- 배포 ID: `7XgHcFDcP` (Current · Ready)
+- 커밋: `f4f7342` — fix: 병실→병상, 제출기한→기한 매핑 수정
+
+---
+
+## ✅ 이전 완료 (2026-03-26)
+
+### 수정된 버그 — app/api/search/route.js
+
+#### 1. /article/undefined 링크 문제 — 수정 완료
 - **원인**: search/route.js가 LawCard.js가 기대하는 id 필드 대신 lawId 를 반환
 - **수정**: id = 법령ID + "_" + 조문번호 형식으로 반환 (article/route.js와 동일)
 - **결과**: 상세 보기 링크가 /article/001788_1 형식으로 정상 작동
 
-#### 2. 원문 링크 없는 문제 - 수정 완료
+#### 2. 원문 링크 없는 문제 — 수정 완료
 - **원인**: search/route.js가 source 필드를 반환하지 않음
 - **수정**: source: "https://www.law.go.kr/lsInfo.do?lsiSeq=" + 법령일련번호 추가
 - **결과**: 원문 링크가 법제처로 정상 연결
 
-#### 3. 잘못된 필드명 - 수정 완료
+#### 3. 잘못된 필드명 — 수정 완료
 - **원인**: articleTitle, articleNumber 등 LawCard.js가 기대하지 않는 이름으로 반환
 - **수정**: title, article: '제X조', category, effectiveDate, summary 올바른 필드명으로 통일
 
-#### 4. 검색 결과에 해당 법령 안 나오는 문제 - 수정 완료
+#### 4. 검색 결과에 해당 법령 안 나오는 문제 — 수정 완료
 - **원인**: display=10에서 상위 5개만 사용, 정렬 없이 API 순서 그대로 사용
 - **수정**: display=20으로 확장 후 검색어와 정확히 일치하는 법령명 우선 정렬
-- **결과**: 의료법 검색 시 의료법, 의료법 시행령, 의료법 시행규칙이 최상단 (총 433개)
-
-#### 5. 한국어 최상위 JSON 키 대응 - 수정 완료 (이전 세션)
-- **원인**: lawService.do?type=JSON 응답 최상위 키가 한국어 '법령'으로 반환됨
-- **수정**: Object.values(articleData)[0] 로 동적 접근
+- **결과**: 의료법 검색 시 의료법이 최상단에 노출
 
 ---
 
-## 현재 앱 상태 (검증 완료)
+## 🔴 알려진 한계 (미해결)
 
-- 검색: 의료법 입력 시 의료법 자체가 첫 번째 결과 표시 ✅
-- 상세 보기: /article/{lawId}_{articleNumber} 형식으로 정상 라우팅 ✅
-- 원문: https://www.law.go.kr/lsInfo.do?lsiSeq=... 정상 링크 ✅
-- 필드: id, lawName, article, title, summary, content, source, category, effectiveDate 모두 정상 ✅
+1. **시행규칙/별표 미포함**: `lawService.do`는 본법 조문만 반환. 시행규칙 별표(병실 면적 기준표 등)는 별도 법령 ID로 검색 필요.
+2. **"병실" 결과가 응급의료법**: 의료법 본법에 "병상" 직접 등장 안 함. 의료법 시행규칙 포함 시 개선 가능.
+3. **"제출 기한" 결과 2건**: 법령 조문에 "기한"이 드물게 등장. 더 구체적인 맥락 필요.
+4. **캐시 TTL 1시간**: `revalidate: 3600`. 법령 개정 시 최대 1시간 지연.
 
-## 커밋 이력
+---
 
-- Fix: search/route.js - correct field names (id, source, category) for LawCard
-- Fix: prioritize exact law name match in search results
+## 📌 다음 작업 후+��
+
+- [ ] 의료법 시행규칙 법령 ID 고정 포함 (fetchLaws 결과와 별도)
+- [ ] keywordMap 지속 확장 (실사용 키워드 수집 후 추가)
+- [ ] 검색 결과 UI — 법령별 그룹핑 표시
+- [ ] app/api/debug/route.js 삭제 (운영 불필요)
