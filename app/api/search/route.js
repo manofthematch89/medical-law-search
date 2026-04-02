@@ -9,6 +9,13 @@ const SUPABASE_URL = process.env.SUPABASE_URL || "";
 const SUPABASE_ANON_KEY = process.env.SUPABASE_ANON_KEY || "";
 const GEMINI_API_KEY = process.env.NEXT_PUBLIC_GEMINI_API_KEY || "";
 const GEMINI_EMBEDDING_MODEL = "gemini-embedding-001";
+const keywordMap = {
+  "병실 크기 기준": "의료기관 시설규격",
+  "병실 면적": "의료기관 시설규격",
+  "병실": "병상",
+  "침대": "병상",
+  "시설 기준": "의료기관 시설규격",
+};
 
 function getCategoryFromLawName(lawName) {
   if (lawName.includes("의료법")) return "의료법 계열";
@@ -24,6 +31,26 @@ function getPriority(lawName) {
   if (lawName.includes("개인정보")) return 2;
   if (lawName.includes("근로기준")) return 3;
   return 4;
+}
+
+function buildFallbackKeywords(query) {
+  const trimmed = String(query || "").trim();
+  if (!trimmed) return [];
+
+  const mapped = keywordMap[trimmed] || "";
+  const tokens = trimmed
+    .split(/\s+/)
+    .map((t) => t.trim())
+    .filter((t) => t.length >= 2);
+
+  const candidates = [trimmed];
+  if (mapped && mapped !== trimmed) candidates.push(mapped);
+  candidates.push(...tokens);
+
+  // 중복 제거 (길이가 긴 키워드 우선)
+  const unique = Array.from(new Set(candidates));
+  unique.sort((a, b) => b.length - a.length);
+  return unique;
 }
 
 export async function GET(request) {
@@ -98,14 +125,25 @@ export async function GET(request) {
     }
 
     // Fallback: 의미검색 결과가 0건일 때는 텍스트 검색 RPC로 보강
-    const { data: textRows, error: textErr } = await supabase.rpc("search_articles", {
-      kw: keyword,
-      lmt: 50,
-    });
-    if (textErr) {
-      console.error("[/api/search] fallback search_articles 오류:", textErr.message);
-      return NextResponse.json([]);
+    const fallbackKeywords = buildFallbackKeywords(keyword);
+    const merged = new Map();
+
+    for (const kw of fallbackKeywords) {
+      const { data: rows, error: textErr } = await supabase.rpc("search_articles", {
+        kw,
+        lmt: 50,
+      });
+      if (textErr) {
+        console.error("[/api/search] fallback search_articles 오류:", textErr.message, "kw=", kw);
+        continue;
+      }
+      for (const row of rows || []) {
+        if (!merged.has(row.id)) merged.set(row.id, row);
+      }
+      if (merged.size >= 50) break;
     }
+
+    const textRows = Array.from(merged.values());
     if (!textRows || !textRows.length) return NextResponse.json([]);
 
     const ids = textRows.map((row) => row.id).filter(Boolean);
