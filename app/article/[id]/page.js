@@ -1,13 +1,15 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { useRouter, useParams } from "next/navigation";
+import { useRouter, useParams, useSearchParams } from "next/navigation";
 import { getLawById } from "../../../lib/lawApi";
 import AiSummaryPanel from "../../../components/AiSummaryPanel";
 
 export default function ArticlePage() {
   const router = useRouter();
   const { id } = useParams();
+  const searchParams = useSearchParams();
+  const srcFromSearch = searchParams.get("src");
   const [law, setLaw] = useState(null);
   const [loading, setLoading] = useState(true);
   const [showAi, setShowAi] = useState(false);
@@ -74,7 +76,7 @@ export default function ArticlePage() {
           </span>
         </div>
         <a
-          href={law.source}
+          href={srcFromSearch || law.source}
           target="_blank"
           rel="noopener noreferrer"
           className="inline-block mt-3 text-xs bg-white border border-blue-300 text-blue-600 hover:bg-blue-600 hover:text-white px-3 py-1.5 rounded-lg transition-colors font-medium"
@@ -109,7 +111,7 @@ export default function ArticlePage() {
 
       {/* AI 요약 패널 */}
       {showAi && (
-        <AiSummaryPanel law={law} onClose={() => setShowAi(false)} />
+        <AiSummaryPanel law={{...law, source: srcFromSearch || law.source}} onClose={() => setShowAi(false)} />
       )}
     </div>
   );

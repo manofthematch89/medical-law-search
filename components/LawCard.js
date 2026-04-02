@@ -47,7 +47,7 @@ export default function LawCard({ law }) {
       {/* 버튼 영역 */}
       <div className="flex gap-2">
         <Link
-          href={`/article/${law.id}`}
+          href={`/article/${law.id}?src=${encodeURIComponent(law.source)}`}
           className="flex-1 text-center bg-blue-600 hover:bg-blue-700 text-white text-sm py-2 rounded-lg font-medium transition-colors"
         >
           상세 보기 + AI 요약
