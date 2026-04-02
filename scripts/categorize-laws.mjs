@@ -97,7 +97,6 @@ async function main() {
   console.log("🚀 categorize-laws 시작");
 
   const batchSize = 60;
-  let start = 0;
   let totalUpdated = 0;
 
   while (true) {
@@ -107,7 +106,7 @@ async function main() {
       // category가 비어있는 조문만 대상으로 (null 또는 빈 문자열)
       .or("category.is.null,category.eq.")
       .order("id", { ascending: true })
-      .range(start, start + batchSize - 1);
+      .range(0, batchSize - 1);
 
     if (error) throw error;
     if (!data || data.length === 0) break;
@@ -145,7 +144,6 @@ async function main() {
       totalUpdated += updates.length;
     }
 
-    start += batchSize;
     await delay(250);
     console.log(`... progress: updated=${totalUpdated}`);
   }
@@ -154,7 +152,18 @@ async function main() {
 }
 
 main().catch((e) => {
-  console.error("💥 categorize-laws 오류:", e);
+  const msg = String(e?.message || "");
+  // Supabase DB에 schema가 아직 적용되지 않은 경우
+  if (e?.code === "42703" && msg.includes("articles.category")) {
+    console.error("💥 categorize-laws 오류: `articles.category` 컬럼이 Supabase에 없습니다.");
+    console.error("아래 SQL을 Supabase SQL Editor에서 실행한 뒤 다시 시도하세요.");
+    console.error("----");
+    console.error("ALTER TABLE articles ADD COLUMN IF NOT EXISTS category TEXT;");
+    console.error("CREATE INDEX IF NOT EXISTS idx_articles_category ON articles(category);");
+    console.error("----");
+  } else {
+    console.error("💥 categorize-laws 오류:", e);
+  }
   process.exit(1);
 });
 
