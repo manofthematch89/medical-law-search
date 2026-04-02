@@ -72,7 +72,7 @@ export async function GET(request) {
       return NextResponse.json({ error: vecErr.message }, { status: 500 });
     }
 
-    const results = (vectorResults || []).map((item) => {
+    const vectorMapped = (vectorResults || []).map((item) => {
       const fullContent = String(item.content || "");
       const summary = fullContent.length > 60 ? fullContent.slice(0, 60) + "…" : fullContent;
       const lawName = String(item.law_name || "");
@@ -92,8 +92,50 @@ export async function GET(request) {
       };
     });
 
-    results.sort((a, b) => (a.priority - b.priority) || ((b.similarity || 0) - (a.similarity || 0)));
-    return NextResponse.json(results.slice(0, 20));
+    if (vectorMapped.length > 0) {
+      vectorMapped.sort((a, b) => (a.priority - b.priority) || ((b.similarity || 0) - (a.similarity || 0)));
+      return NextResponse.json(vectorMapped.slice(0, 20));
+    }
+
+    // Fallback: 의미검색 결과가 0건일 때는 텍스트 검색 RPC로 보강
+    const { data: textRows, error: textErr } = await supabase.rpc("search_articles", {
+      kw: keyword,
+      lmt: 50,
+    });
+    if (textErr) {
+      console.error("[/api/search] fallback search_articles 오류:", textErr.message);
+      return NextResponse.json([]);
+    }
+    if (!textRows || !textRows.length) return NextResponse.json([]);
+
+    const ids = textRows.map((row) => row.id).filter(Boolean);
+    const { data: catRows } = ids.length
+      ? await supabase.from("articles").select("id,category").in("id", ids)
+      : { data: [] };
+    const catById = new Map((catRows || []).map((r) => [r.id, r.category]));
+
+    const fallbackResults = textRows.map((row) => {
+      const fullContent = String(row.content || "");
+      const summary = fullContent.length > 60 ? fullContent.slice(0, 60) + "…" : fullContent;
+      const lawName = String(row.law_name || "");
+      const dbCategory = String(catById.get(row.id) || "").trim();
+      return {
+        id: row.id,
+        lawName,
+        article: `제${row.article_no}조`,
+        title: String(row.article_title || ""),
+        summary,
+        effectiveDate: String(row.effective_date || ""),
+        category: dbCategory || getCategoryFromLawName(lawName),
+        content: fullContent,
+        source: row.law_serial_no
+          ? `https://www.law.go.kr/lsInfo.do?lsiSeq=${row.law_serial_no}`
+          : `https://www.law.go.kr/lsSc.do?query=${encodeURIComponent(lawName)}`,
+        priority: getPriority(lawName),
+      };
+    });
+    fallbackResults.sort((a, b) => a.priority - b.priority);
+    return NextResponse.json(fallbackResults.slice(0, 20));
   } catch (err) {
     console.error("[/api/search] 오류:", err);
     return NextResponse.json(
