@@ -31,6 +31,12 @@ if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
 }
 
 const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
+try {
+  const host = new URL(SUPABASE_URL).host;
+  console.log(`[ENV] SUPABASE_URL host: ${host}`);
+} catch {
+  console.log(`[ENV] SUPABASE_URL: ${SUPABASE_URL}`);
+}
 
 const delay = (ms) => new Promise((r) => setTimeout(r, ms));
 
