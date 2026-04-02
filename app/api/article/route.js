@@ -72,7 +72,8 @@ export async function GET(request) {
     if (!lawInfo) return NextResponse.json(null, { status: 404 });
 
     const rawLawName = lawInfo["법령명"];
-    const lawName = typeof rawLawName === "object" ? rawLawName?.["#text"] || "" : String(rawLawName || "");
+    const lawName = typeof rawLawName === "object" ? rawLawName?.["#text"] || "" : String(rawLawName || lawInfo["법령명한글"] || "");
+    const lsiSeq = String(lawInfo["법령일련번호"] || "");
     const effectiveDate = formatDate(lawInfo["시행일자"]);
 
     const articles = toArray(data?.법령?.조문?.조문단위);
@@ -96,7 +97,7 @@ export async function GET(request) {
       effectiveDate,
       category: getCategoryFromLawName(lawName),
       content: articleContent,
-      source: `https://www.law.go.kr/lsSc.do?query=${encodeURIComponent(lawName)}`,
+      source: lsiSeq ? `https://www.law.go.kr/lsInfo.do?lsiSeq=${lsiSeq}` : `https://www.law.go.kr/lsSc.do?query=${encodeURIComponent(lawName)}`,
       priority: 1,
     });
   } catch (err) {
