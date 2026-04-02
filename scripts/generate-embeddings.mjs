@@ -1,5 +1,5 @@
 import { createClient } from "@supabase/supabase-js";
-import { GoogleGenerativeAI } from "@google/generative-ai";
+import { GoogleGenAI } from "@google/genai";
 import { readFileSync } from "fs";
 import { join } from "path";
 
@@ -23,54 +23,31 @@ try {
 
 const SUPABASE_URL = process.env.SUPABASE_URL || "";
 const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || "";
-const GEMINI_API_KEY = process.env.NEXT_PUBLIC_GEMINI_API_KEY || "";
+// 로컬 스크립트이므로 server-side 키 사용을 권장하되, 기존 변수명도 호환
+const GEMINI_API_KEY =
+  process.env.GEMINI_API_KEY ||
+  process.env.NEXT_PUBLIC_GEMINI_API_KEY ||
+  "";
 
 if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
   console.error("❌ 환경변수 누락: SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY");
   process.exit(1);
 }
 if (!GEMINI_API_KEY) {
-  console.error("❌ 환경변수 누락: NEXT_PUBLIC_GEMINI_API_KEY");
+  console.error("❌ 환경변수 누락: GEMINI_API_KEY (또는 NEXT_PUBLIC_GEMINI_API_KEY)");
   process.exit(1);
 }
 
 const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
-const genAI = new GoogleGenerativeAI(GEMINI_API_KEY);
+const ai = new GoogleGenAI({ apiKey: GEMINI_API_KEY });
 
-// Gemini embedding 모델은 계정/버전(v1beta)별로 가용 모델명이 다를 수 있어
-// 환경변수로 오버라이드 가능하게 두고, 기본값은 보수적으로 설정합니다.
-// 예: GEMINI_EMBEDDING_MODEL=embedding-001
-const GEMINI_EMBEDDING_MODEL =
-  process.env.GEMINI_EMBEDDING_MODEL ||
-  process.env.NEXT_PUBLIC_GEMINI_EMBEDDING_MODEL ||
-  "embedding-001";
-
-const model = genAI.getGenerativeModel({ model: GEMINI_EMBEDDING_MODEL });
-
-async function preflightListModels() {
-  // listModels()는 계정에 따라 실패할 수 있으므로 best-effort로만 사용
-  try {
-    const res = await genAI.listModels();
-    const models = res?.models || [];
-    const embedCapable = models
-      .filter((m) => Array.isArray(m.supportedGenerationMethods) && m.supportedGenerationMethods.includes("embedContent"))
-      .map((m) => m.name);
-
-    console.log(`[GEMINI] embedding model: ${GEMINI_EMBEDDING_MODEL}`);
-    if (embedCapable.length) {
-      console.log(`[GEMINI] embedContent 지원 모델 예시: ${embedCapable.slice(0, 8).join(", ")}`);
-    } else {
-      console.log("[GEMINI] embedContent 지원 모델을 listModels에서 찾지 못했습니다.");
-    }
-  } catch (e) {
-    console.log(`[GEMINI] embedding model: ${GEMINI_EMBEDDING_MODEL}`);
-    console.log("[GEMINI] listModels 생략(권한/환경 이슈 가능):", String(e?.message || e));
-  }
-}
+// 2026 기준 Gemini embedding 모델 (공식 문서)
+// 필요 시 .env.local에 GEMINI_EMBEDDING_MODEL로 오버라이드
+const GEMINI_EMBEDDING_MODEL = process.env.GEMINI_EMBEDDING_MODEL || "gemini-embedding-001";
 
 async function generateEmbeddings() {
   console.log('🚀 벡터 변환 작업을 시작합니다...');
-  await preflightListModels();
+  console.log(`[GEMINI] embedding model: ${GEMINI_EMBEDDING_MODEL}`);
 
   const { data: articles, error } = await supabase
     .from('articles')
@@ -83,8 +60,17 @@ async function generateEmbeddings() {
   for (const article of articles) {
     try {
       const text = `${article.article_title} ${article.content}`;
-      const result = await model.embedContent(text);
-      const embedding = result.embedding.values;
+
+      const result = await ai.models.embedContent({
+        model: GEMINI_EMBEDDING_MODEL,
+        contents: text,
+      });
+
+      // @google/genai 결과는 embeddings 배열로 내려옴
+      const embedding = result?.embeddings?.[0]?.values;
+      if (!Array.isArray(embedding) || embedding.length === 0) {
+        throw new Error("EMPTY_EMBEDDING");
+      }
 
       await supabase
         .from('articles')
