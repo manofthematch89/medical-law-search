@@ -2,6 +2,24 @@
 
 ---
 
+## ✅ 완료 (2026-04-02) — 검색 API 의미검색 전환 + 긴 문장 fallback 보강
+
+### 문제
+- 긴 문장 검색에서 벡터 결과가 0건일 때 화면에 결과가 비어 보이는 문제가 있었음
+
+### 원인
+- 검색 API를 의미검색으로 전환한 뒤, fallback이 문장 전체 1회 텍스트 검색이라 긴 질의에서 매칭률이 낮았음
+
+### 수정 (핀포인트)
+| 파일 | 변경 내용 |
+|---|---|
+| `app/api/search/route.js` | Gemini 임베딩 + `match_articles` RPC 기반 의미검색으로 전환 |
+| `app/api/search/route.js` | 벡터 결과 0건 시 `search_articles` fallback 추가 |
+| `app/api/search/route.js` | fallback에서 긴 문장을 토큰 분해/키워드 매핑해 다중 검색 후 결과 병합 |
+
+### 배포
+- `main` 푸시 완료 (Vercel 자동 배포 트리거)
+
 ## ✅ 완료 (2026-04-02) — 임베딩 생성 (`articles.embedding`)
 
 ### 문제

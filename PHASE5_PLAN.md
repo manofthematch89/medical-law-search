@@ -26,5 +26,7 @@
 - [x] `scripts/categorize-laws.mjs`: `articles.category` 비어있는 조문을 키워드 규칙으로 분류 후 upsert (`totalUpdated=2820`)
 - [x] 검색 UI: 검색 결과 `category`를 동적으로 추출해 필터 버튼으로 노출하고 클릭 시 필터링 작동
 - [x] `scripts/generate-embeddings.mjs`: Gemini 임베딩 생성 후 `articles.embedding` 채우기 (실행 완료)
+- [x] `app/api/search/route.js`: Gemini 임베딩 + `match_articles` RPC 기반 의미검색 전환
+- [x] 검색 fallback: 벡터 결과 0건일 때 토큰 분해 기반 텍스트 fallback 적용
 - [ ] 검색 결과에서 본법과 시행규칙이 명확히 구분되어 표시되는가?
 - [ ] "병실 면적" 검색 시 관련 시행규칙 조문이 상단에 노출되는가?
