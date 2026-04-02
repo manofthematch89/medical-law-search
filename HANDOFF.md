@@ -1,7 +1,7 @@
 # HANDOFF.md — MdLaw 프로젝트 인수인계 가이드
 
 > 이 파일을 AI 대화 시작할 때 PROGRESS.md와 함께 공유하면 바로 이어서 작업할 수 있습니다.
-> **마지막 업데이트: 2026-04-02**
+> **마지막 업데이트: 2026-04-02 (Phase 4 최종)**
 
 ---
 
@@ -20,10 +20,10 @@ URL: https://medical-law-search.vercel.app
 
 원문 보기 버튼 source URL 통일 수정.
 
-- **버그**: 검색 결과 카드 "원문 ↗"는 정상 작동, 상세 페이지 "법제처 원문 보기 ↗"는 비정상
-- **원인**: `article/route.js`의 `source`가 `lsSc.do?query=lawName` 형식 → `lawName` 파싱 실패 시 공란 URL 생성
-- **수정**: `article/route.js` + `search/route.js` 모두 `lsInfo.do?lsiSeq=${lawId}` 형식으로 통일 (법령 ID 직접 링크)
-- **변경 파일**: `app/api/article/route.js` (line 99), `app/api/search/route.js` (line 169)
+- **버그**: 검색 카드 "원문 ↗"는 정상, 상세 페이지 "법제처 원문 보기" + AI 요약 "원문 ↗" 모두 `lsSc.do?query=`(빈 쿼리)로 연결
+- **원인**: `lawService.do` API의 `기본정보`에 `법령명` / `법령명한글` 필드가 없어 `lawName = ""` → source URL 공란
+- **수정**: `LawCard.js`에서 이미 올바른 source URL을 `?src=` 파라미터로 상세 페이지에 전달, `article/[id]/page.js`에서 `useSearchParams`로 읽어 사용
+- **변경 파일**: `components/LawCard.js`, `app/article/[id]/page.js`
 
 ---
 

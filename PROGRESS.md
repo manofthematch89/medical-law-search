@@ -2,25 +2,25 @@
 
 ---
 
-## ✅ 완료 (2026-04-02) — 원문 보기 source URL 버그 수정
+## ✅ 완료 (2026-04-02) — 원문 보기 source URL 버그 수정 (Phase 4 최종)
 
 ### 문제
-- 검색 결과 카드의 "원문 ↗" 버튼은 정상 작동
-- 상세 페이지(article/[id])의 "법제처 원문 보기 ↗" 버튼이 작동 안 함 (같은 페이지로 이동)
+- 검색 카드 "원문 ↗"는 정상 작동
+- 상세 페이지 "법제처 원문 보기 ↗", AI 요약 "원문 ↗" → `lsSc.do?query=`(빈 쿼리) → law.go.kr 메인만 열림
 
-### 원인
-- `article/route.js`의 `source`가 `lsSc.do?query=${lawName}` 형식
-- `lawService.do` API 응답의 `법령명` 필드가 객체(`{"#text": "..."}`)로 올 때 파싱 실패 → lawName이 빈 문자열 → source URL이 `lsSc.do?query=`(빈 쿼리)
-- `href`가 빈 값이면 현재 페이지로 이동 → "같은 걸로 뜬다"는 증상
+### 원인 (브라우저로 API 응답 직접 확인)
+- `/api/article?id=000218_26` 응답: `lawName: ""`, `source: "https://www.law.go.kr/lsSc.do?query="`
+- `lawService.do` API `기본정보`에 `법령명` / `법령명한글` 필드 자체가 없음 → 어떤 코드 수정으로도 lawName 복구 불가
 
 ### 수정 (핀포인트)
 | 파일 | 변경 내용 |
 |---|---|
-| `app/api/article/route.js` | `source`: `lsSc.do?query=lawName` → `lsInfo.do?lsiSeq=${lawId}` |
-| `app/api/search/route.js` | 동일하게 `lsInfo.do?lsiSeq=${lawId}` 로 통일 |
+| `components/LawCard.js` | 상세 보기 Link에 `?src=${encodeURIComponent(law.source)}` 파라미터 추가 |
+| `app/article/[id]/page.js` | `useSearchParams`로 `src` 읽어 `law.source` 대신 사용, AiSummaryPanel에도 전달 |
 
-→ `lawId`는 항상 존재하는 숫자값이므로 파싱 오류 없음
-→ 두 버튼 모두 법제처 해당 법령 상세 페이지로 직접 연결
+### 중간 실패 이력 (재발 방지)
+- `lsInfo.do?lsiSeq=lawId` 시도 → `법령ID` ≠ `lsiSeq(법령일련번호)` → 양쪽 다 깨짐 → 즉시 롤백
+- `법령명한글` 필드 fallback 추가 → `기본정보`에 해당 필드 없음 → 여전히 공란
 
 ---
 
