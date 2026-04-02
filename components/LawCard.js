@@ -4,6 +4,10 @@ const CATEGORY_COLORS = {
   "의료법 계열": "bg-blue-50 text-blue-700 border-blue-200",
   개인정보보호법: "bg-purple-50 text-purple-700 border-purple-200",
   근로기준법: "bg-green-50 text-green-700 border-green-200",
+  "시설/환경": "bg-blue-50 text-blue-700 border-blue-200",
+  "인력/면허": "bg-cyan-50 text-cyan-700 border-cyan-200",
+  "원무/행정": "bg-gray-50 text-gray-700 border-gray-200",
+  "응급/특수": "bg-indigo-50 text-indigo-700 border-indigo-200",
 };
 
 export default function LawCard({ law }) {

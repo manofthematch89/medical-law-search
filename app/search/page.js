@@ -5,7 +5,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { searchLaws } from "../../lib/lawApi";
 import LawCard from "../../components/LawCard";
 
-const CATEGORIES = ["전체", "의료법 계열", "개인정보보호법", "근로기준법"];
+const CATEGORY_ORDER = ["시설/환경", "인력/면허", "원무/행정", "응급/특수", "의료법 계열", "개인정보보호법", "근로기준법", "기타"];
 
 function SearchContent() {
   const router = useRouter();
@@ -19,6 +19,7 @@ function SearchContent() {
 
   useEffect(() => {
     if (!queryParam) return;
+    setActiveCategory("전체");
     setLoading(true);
     searchLaws(queryParam)
       .then(setResults)
@@ -39,6 +40,17 @@ function SearchContent() {
     activeCategory === "전체"
       ? results
       : results.filter((r) => r.category === activeCategory);
+
+  const derivedCategories = Array.from(
+    new Set(results.map((r) => r.category).filter((v) => typeof v === "string" && v.trim()))
+  ).sort((a, b) => {
+    const ai = CATEGORY_ORDER.indexOf(a);
+    const bi = CATEGORY_ORDER.indexOf(b);
+    if (ai === -1 && bi === -1) return a.localeCompare(b, "ko");
+    if (ai === -1) return 1;
+    if (bi === -1) return -1;
+    return ai - bi;
+  });
 
   return (
     <div className="flex flex-col gap-5">
@@ -78,11 +90,8 @@ function SearchContent() {
       {/* 카테고리 탭 */}
       {results.length > 0 && (
         <div className="flex gap-2 overflow-x-auto pb-1">
-          {CATEGORIES.map((cat) => {
-            const count =
-              cat === "전체"
-                ? results.length
-                : results.filter((r) => r.category === cat).length;
+          {["전체", ...derivedCategories].map((cat) => {
+            const count = cat === "전체" ? results.length : results.filter((r) => r.category === cat).length;
             if (count === 0 && cat !== "전체") return null;
             return (
               <button
