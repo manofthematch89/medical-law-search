@@ -2,6 +2,23 @@
 
 ---
 
+## ✅ 완료 (2026-04-02) — `articles.category` 자동 분류
+
+### 문제
+- `articles.category` 기반 업무 분류 필터링을 위해, DB에 비어있는 조문들의 category를 채워야 했음
+
+### 원인
+- 스키마 확장(`articles.category`) 이후, 실제 데이터에 category 값 적재가 필요했음
+
+### 수정 (핀포인트)
+| 파일 | 변경 내용 |
+|---|---|
+| `scripts/categorize-laws.mjs` | `articles.category`가 `NULL/빈 문자열`인 조문만 조회해 `article_title+content` 키워드 규칙으로 분류 후 upsert |
+| `scripts/schema.sql` | `articles.category` 컬럼 + `idx_articles_category` 인덱스 추가 |
+
+### 실행 결과
+- `node scripts/categorize-laws.mjs` 실행: `totalUpdated=2820`
+
 ## 🚧 진행 (2026-04-02) — Phase 5 시작: 하위 법령 ID 확장 수집 + 별표 인덱싱 보강
 
 ### 문제

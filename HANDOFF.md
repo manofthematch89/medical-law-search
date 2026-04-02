@@ -23,8 +23,9 @@ URL: https://medical-law-search.vercel.app
 - **`scripts/collect-laws.mjs`**: 조문 본문(content) 생성 시 `별표*` 관련 필드(키에 `별표` 포함)를 함께 합쳐 인덱스 누락 완화
 - **`scripts/schema.sql`**: Supabase `laws/articles` 스키마 + `search_articles()` RPC를 main에 추가(Phase 3 기반)
 - **`scripts/schema.sql`**: `articles.category` 컬럼 + `idx_articles_category` 인덱스 추가
+- **`scripts/categorize-laws.mjs`**: `articles.category` 비어있는 조문을 텍스트 키워드 규칙으로 분류 후 upsert (실행 결과: `totalUpdated=2820`)
 
-> 아직 검증 필요: 실제로 “시행규칙 조문”이 DB에 적재되고 “병실 면적” 검색 우선 노출까지 되는지 `node scripts/collect-laws.mjs` 실행 후 확인
+> 남은 검증 필요: 실제로 “시행규칙 조문”이 DB에 적재되고 “병실 면적” 검색 우선 노출까지 되는지 `node scripts/collect-laws.mjs` 재수집 후 검색 결과에서 확인
 
 ## ✅ Phase 4 완료 (2026-04-02)
 
