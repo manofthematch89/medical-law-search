@@ -164,6 +164,8 @@ main().catch((e) => {
   } else {
     console.error("💥 categorize-laws 오류:", e);
   }
-  process.exit(1);
+  // 프로세스를 강제 종료하지 않아서, Windows/Node 종료 타이밍에서 발생할 수 있는
+  // UV assertion 로그를 줄입니다.
+  return;
 });
 
