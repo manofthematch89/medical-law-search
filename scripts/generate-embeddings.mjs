@@ -36,10 +36,41 @@ if (!GEMINI_API_KEY) {
 
 const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 const genAI = new GoogleGenerativeAI(GEMINI_API_KEY);
-const model = genAI.getGenerativeModel({ model: "text-embedding-004" });
+
+// Gemini embedding 모델은 계정/버전(v1beta)별로 가용 모델명이 다를 수 있어
+// 환경변수로 오버라이드 가능하게 두고, 기본값은 보수적으로 설정합니다.
+// 예: GEMINI_EMBEDDING_MODEL=embedding-001
+const GEMINI_EMBEDDING_MODEL =
+  process.env.GEMINI_EMBEDDING_MODEL ||
+  process.env.NEXT_PUBLIC_GEMINI_EMBEDDING_MODEL ||
+  "embedding-001";
+
+const model = genAI.getGenerativeModel({ model: GEMINI_EMBEDDING_MODEL });
+
+async function preflightListModels() {
+  // listModels()는 계정에 따라 실패할 수 있으므로 best-effort로만 사용
+  try {
+    const res = await genAI.listModels();
+    const models = res?.models || [];
+    const embedCapable = models
+      .filter((m) => Array.isArray(m.supportedGenerationMethods) && m.supportedGenerationMethods.includes("embedContent"))
+      .map((m) => m.name);
+
+    console.log(`[GEMINI] embedding model: ${GEMINI_EMBEDDING_MODEL}`);
+    if (embedCapable.length) {
+      console.log(`[GEMINI] embedContent 지원 모델 예시: ${embedCapable.slice(0, 8).join(", ")}`);
+    } else {
+      console.log("[GEMINI] embedContent 지원 모델을 listModels에서 찾지 못했습니다.");
+    }
+  } catch (e) {
+    console.log(`[GEMINI] embedding model: ${GEMINI_EMBEDDING_MODEL}`);
+    console.log("[GEMINI] listModels 생략(권한/환경 이슈 가능):", String(e?.message || e));
+  }
+}
 
 async function generateEmbeddings() {
   console.log('🚀 벡터 변환 작업을 시작합니다...');
+  await preflightListModels();
 
   const { data: articles, error } = await supabase
     .from('articles')
@@ -71,6 +102,14 @@ async function generateEmbeddings() {
       if (msg.includes("API_KEY_INVALID") || msg.includes("API key not valid")) {
         throw new Error("GEMINI_API_KEY_INVALID");
       }
+
+      // 모델 미지원/미존재(404)도 계속 시도해봐야 전부 실패 → 즉시 중단
+      if (
+        msg.includes("404") &&
+        (msg.includes("is not found") || msg.includes("not supported for embedContent"))
+      ) {
+        throw new Error("GEMINI_EMBEDDING_MODEL_NOT_SUPPORTED");
+      }
     }
   }
   console.log('✨ 모든 작업이 완료되었습니다.');
@@ -79,6 +118,9 @@ async function generateEmbeddings() {
 generateEmbeddings().catch((e) => {
   if (String(e?.message || "") === "GEMINI_API_KEY_INVALID") {
     console.error("🛑 중단: Gemini API 키가 유효하지 않습니다. (.env.local의 NEXT_PUBLIC_GEMINI_API_KEY 확인)");
+  } else if (String(e?.message || "") === "GEMINI_EMBEDDING_MODEL_NOT_SUPPORTED") {
+    console.error("🛑 중단: 현재 설정된 embedding 모델이 v1beta에서 embedContent를 지원하지 않습니다.");
+    console.error("→ `.env.local`에 `GEMINI_EMBEDDING_MODEL=embedding-001` 같은 값으로 지정 후 재시도하세요.");
   } else {
     console.error("💥 스크립트 오류:", e);
   }
