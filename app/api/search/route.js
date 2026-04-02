@@ -1,11 +1,14 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
+import { GoogleGenAI } from "@google/genai";
 
 export const runtime = "edge";
 export const preferredRegion = "icn1";
 
 const SUPABASE_URL = process.env.SUPABASE_URL || "";
 const SUPABASE_ANON_KEY = process.env.SUPABASE_ANON_KEY || "";
+const GEMINI_API_KEY = process.env.GEMINI_API_KEY || process.env.NEXT_PUBLIC_GEMINI_API_KEY || "";
+const GEMINI_EMBEDDING_MODEL = process.env.GEMINI_EMBEDDING_MODEL || "gemini-embedding-001";
 
 const keywordMap = {
   "차트 보관": "진료기록부 보존기간",
@@ -32,12 +35,6 @@ const keywordMap = {
 
 function convertKeyword(query) {
   return keywordMap[query.trim()] || query.trim();
-}
-
-function formatDate(dateStr) {
-  if (!dateStr || String(dateStr).length !== 8) return String(dateStr || "");
-  const s = String(dateStr);
-  return `${s.slice(0, 4)}-${s.slice(4, 6)}-${s.slice(6, 8)}`;
 }
 
 function getCategoryFromLawName(lawName) {
@@ -71,6 +68,63 @@ export async function GET(request) {
 
     const keyword = convertKeyword(query);
     const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+    // 의미(임베딩) 검색 모드: /api/search?query=...&ai=1
+    const useAi = searchParams.get("ai") === "1";
+    if (useAi) {
+      if (!GEMINI_API_KEY) {
+        return NextResponse.json(
+          { error: "GEMINI_API_KEY (또는 NEXT_PUBLIC_GEMINI_API_KEY) 환경변수가 설정되지 않았습니다." },
+          { status: 500 }
+        );
+      }
+
+      const threshold = Number(searchParams.get("th") || "0.3");
+      const count = Number(searchParams.get("k") || "20");
+
+      const ai = new GoogleGenAI({ apiKey: GEMINI_API_KEY });
+      const embedRes = await ai.models.embedContent({
+        model: GEMINI_EMBEDDING_MODEL,
+        contents: keyword,
+      });
+      const embedding = embedRes?.embeddings?.[0]?.values;
+      if (!Array.isArray(embedding) || embedding.length === 0) {
+        return NextResponse.json({ error: "임베딩 생성 실패" }, { status: 500 });
+      }
+
+      const { data: vectorResults, error: vecErr } = await supabase.rpc("match_articles", {
+        query_embedding: embedding,
+        match_threshold: threshold,
+        match_count: count,
+      });
+      if (vecErr) {
+        console.error("[/api/search] match_articles 오류:", vecErr.message);
+        return NextResponse.json({ error: vecErr.message }, { status: 500 });
+      }
+
+      const results = (vectorResults || []).map((item) => {
+        const fullContent = String(item.content || "");
+        const summary = fullContent.length > 60 ? fullContent.slice(0, 60) + "…" : fullContent;
+        const lawName = String(item.law_name || "");
+        const dbCategory = String(item.category || "").trim();
+        return {
+          id: item.id,
+          lawName,
+          article: `제${item.article_no}조`,
+          title: String(item.title || ""),
+          summary,
+          effectiveDate: String(item.effective_date || ""),
+          category: dbCategory || getCategoryFromLawName(lawName),
+          content: fullContent,
+          source: `https://www.law.go.kr/lsSc.do?query=${encodeURIComponent(lawName)}`,
+          priority: getPriority(lawName),
+          similarity: item.similarity,
+        };
+      });
+
+      results.sort((a, b) => (a.priority - b.priority) || ((b.similarity || 0) - (a.similarity || 0)));
+      return NextResponse.json(results.slice(0, 20));
+    }
 
     // 1) RPC로 검색 (id/법령/조문/본문 반환)
     const { data, error } = await supabase.rpc("search_articles", {

@@ -52,7 +52,7 @@ async function generateEmbeddings() {
   const { data: articles, error } = await supabase
     .from('articles')
     .select('id, article_title, content')
-    .is('embedding', null); // 아직 변환 안 된 것만
+    .or('embedding.is.null,embedding_vector.is.null'); // 아직 변환 안 된 것만
 
   if (error) throw error;
   console.log(`대상 조문: ${articles.length}개`);
@@ -74,7 +74,7 @@ async function generateEmbeddings() {
 
       await supabase
         .from('articles')
-        .update({ embedding })
+        .update({ embedding, embedding_vector: embedding })
         .eq('id', article.id);
 
       console.log(`✅ 완료 (ID: ${article.id})`);

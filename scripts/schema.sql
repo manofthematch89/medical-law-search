@@ -5,6 +5,10 @@
 -- 1. 한국어 trigram 검색을 위한 pg_trgm 확장 활성화
 CREATE EXTENSION IF NOT EXISTS pg_trgm;
 
+-- 1-1. (Phase 5) 벡터 검색을 위한 pgvector 확장
+-- Supabase Dashboard → Database → Extensions 에서도 활성화 가능
+CREATE EXTENSION IF NOT EXISTS vector;
+
 -- ============================================================
 -- 2. laws 테이블 — 법령 메타정보
 -- ============================================================
@@ -35,6 +39,11 @@ CREATE TABLE IF NOT EXISTS articles (
 -- ============================================================
 ALTER TABLE articles ADD COLUMN IF NOT EXISTS category TEXT;
 
+-- 3-2. (Phase 5) 의미(임베딩) 검색용 벡터 컬럼
+-- generate-embeddings.mjs가 이 컬럼을 채움
+-- ※ 차원(dimension)은 gemini-embedding-001 기본 출력(768)을 기준으로 설정
+ALTER TABLE articles ADD COLUMN IF NOT EXISTS embedding_vector vector(768);
+
 -- ============================================================
 -- 4. GIN 인덱스 — trigram 기반 검색 성능
 -- ============================================================
@@ -49,6 +58,11 @@ CREATE INDEX IF NOT EXISTS articles_title_trgm_idx
 
 -- category 필터링 속도를 높이기 위한 인덱스
 CREATE INDEX IF NOT EXISTS idx_articles_category ON articles(category);
+
+-- 벡터 유사도 검색 인덱스 (cosine distance)
+-- 데이터가 충분히 쌓인 뒤에는 ivfflat 사용을 권장 (analyze 후 lists 조정)
+CREATE INDEX IF NOT EXISTS idx_articles_embedding_vector
+  ON articles USING ivfflat (embedding_vector vector_cosine_ops) WITH (lists = 100);
 
 -- law_id FK 조회 인덱스
 CREATE INDEX IF NOT EXISTS articles_law_id_idx
@@ -104,5 +118,45 @@ AS $$
     -- 제목에 키워드 포함 시 본문보다 우선
     CASE WHEN a.article_title ILIKE '%' || kw || '%' THEN 0 ELSE 1 END
   LIMIT lmt;
+$$;
+
+-- ============================================================
+-- 6. (Phase 5) 의미 검색용 RPC — 벡터 유사도 기반 top-k
+-- ============================================================
+CREATE OR REPLACE FUNCTION match_articles(
+  query_embedding vector(768),
+  match_threshold float DEFAULT 0.3,
+  match_count int DEFAULT 20
+)
+RETURNS TABLE (
+  id            TEXT,
+  law_id        TEXT,
+  law_name      TEXT,
+  effective_date TEXT,
+  article_no    TEXT,
+  title         TEXT,
+  content       TEXT,
+  category      TEXT,
+  similarity    float
+)
+LANGUAGE sql
+STABLE
+AS $$
+  SELECT
+    a.id,
+    a.law_id,
+    l.law_name,
+    l.effective_date,
+    a.article_no,
+    a.article_title AS title,
+    a.content,
+    a.category,
+    1 - (a.embedding_vector <=> query_embedding) AS similarity
+  FROM articles a
+  JOIN laws l ON a.law_id = l.law_id
+  WHERE a.embedding_vector IS NOT NULL
+    AND (1 - (a.embedding_vector <=> query_embedding)) >= match_threshold
+  ORDER BY a.embedding_vector <=> query_embedding
+  LIMIT match_count;
 $$;
 
