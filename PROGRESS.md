@@ -2,6 +2,22 @@
 
 ---
 
+## ✅ 완료 (2026-04-02) — 임베딩 생성 (`articles.embedding`)
+
+### 문제
+- 조문 유사도 검색/벡터 기반 기능을 위해 `articles.embedding` 컬럼에 임베딩 벡터를 채워야 했음
+
+### 원인
+- Gemini 임베딩 모델/SDK가 업데이트되며 기존 모델명(`text-embedding-004`, `embedding-001`)이 v1beta에서 404로 실패하는 이슈가 발생
+
+### 수정 (핀포인트)
+| 파일 | 변경 내용 |
+|---|---|
+| `scripts/generate-embeddings.mjs` | `.env.local` 직접 로드 + `@google/genai` 기반 `gemini-embedding-001`로 임베딩 생성 후 `articles.embedding` 업데이트 |
+
+### 실행 결과
+- `node scripts/generate-embeddings.mjs` 실행 완료 (터미널: `✨ 모든 작업이 완료되었습니다.`)
+
 ## ✅ 완료 (2026-04-02) — `articles.category` 자동 분류
 
 ### 문제

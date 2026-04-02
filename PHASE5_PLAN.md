@@ -24,5 +24,7 @@
 - [x] `scripts/schema.sql`: `articles.category` 컬럼 및 `idx_articles_category` 인덱스 추가
 - [x] collect-laws.mjs: `lawService.do` 상세(JSON) 내부의 하위/관련 법령 ID를 재귀 추출해 수집 큐를 확장하고, 조문 content에 `별표` 관련 문자열을 함께 결합 (DB 적재 “검증”은 아직)
 - [x] `scripts/categorize-laws.mjs`: `articles.category` 비어있는 조문을 키워드 규칙으로 분류 후 upsert (`totalUpdated=2820`)
+- [x] 검색 UI: 검색 결과 `category`를 동적으로 추출해 필터 버튼으로 노출하고 클릭 시 필터링 작동
+- [x] `scripts/generate-embeddings.mjs`: Gemini 임베딩 생성 후 `articles.embedding` 채우기 (실행 완료)
 - [ ] 검색 결과에서 본법과 시행규칙이 명확히 구분되어 표시되는가?
 - [ ] "병실 면적" 검색 시 관련 시행규칙 조문이 상단에 노출되는가?

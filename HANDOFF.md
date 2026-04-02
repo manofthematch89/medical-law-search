@@ -24,6 +24,16 @@ URL: https://medical-law-search.vercel.app
 - **`scripts/schema.sql`**: Supabase `laws/articles` 스키마 + `search_articles()` RPC를 main에 추가(Phase 3 기반)
 - **`scripts/schema.sql`**: `articles.category` 컬럼 + `idx_articles_category` 인덱스 추가
 - **`scripts/categorize-laws.mjs`**: `articles.category` 비어있는 조문을 텍스트 키워드 규칙으로 분류 후 upsert (실행 결과: `totalUpdated=2820`)
+- **`app/search/page.js`**: 검색 결과에서 `category` 목록을 동적으로 추출해 필터 버튼(탭)으로 노출, 클릭 시 해당 category만 필터링
+- **`app/api/search/route.js`**: Supabase 검색 응답에 `articles.category`를 포함해 내려주도록 수정
+- **`scripts/generate-embeddings.mjs`**: Gemini 임베딩 생성 후 `articles.embedding` 채우기 (실행 완료)
+
+### 임베딩 스크립트 실행 (로컬)
+```bash
+node scripts/generate-embeddings.mjs
+```
+- 필요 환경변수: `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `GEMINI_API_KEY`(또는 `NEXT_PUBLIC_GEMINI_API_KEY`)
+- 임베딩 모델: 기본 `gemini-embedding-001` (필요 시 `GEMINI_EMBEDDING_MODEL`로 변경)
 
 > 남은 검증 필요: 실제로 “시행규칙 조문”이 DB에 적재되고 “병실 면적” 검색 우선 노출까지 되는지 `node scripts/collect-laws.mjs` 재수집 후 검색 결과에서 확인
 
