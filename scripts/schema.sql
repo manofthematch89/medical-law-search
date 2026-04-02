@@ -31,6 +31,11 @@ CREATE TABLE IF NOT EXISTS articles (
 );
 
 -- ============================================================
+-- 3-1. (Phase 5) articles 업무 분류용 category 컬럼
+-- ============================================================
+ALTER TABLE articles ADD COLUMN IF NOT EXISTS category TEXT;
+
+-- ============================================================
 -- 4. GIN 인덱스 — trigram 기반 검색 성능
 -- ============================================================
 
@@ -41,6 +46,9 @@ CREATE INDEX IF NOT EXISTS articles_content_trgm_idx
 -- 조문 제목 검색 인덱스
 CREATE INDEX IF NOT EXISTS articles_title_trgm_idx
   ON articles USING GIN (article_title gin_trgm_ops);
+
+-- category 필터링 속도를 높이기 위한 인덱스
+CREATE INDEX IF NOT EXISTS idx_articles_category ON articles(category);
 
 -- law_id FK 조회 인덱스
 CREATE INDEX IF NOT EXISTS articles_law_id_idx

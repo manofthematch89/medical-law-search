@@ -21,6 +21,7 @@
   - "인력", "정원" -> "의료인 정원", "배치 기준" 매핑 추가.
 
 ## ✅ 체크리스트
+- [x] `scripts/schema.sql`: `articles.category` 컬럼 및 `idx_articles_category` 인덱스 추가
 - [x] collect-laws.mjs: `lawService.do` 상세(JSON) 내부의 하위/관련 법령 ID를 재귀 추출해 수집 큐를 확장하고, 조문 content에 `별표` 관련 문자열을 함께 결합 (DB 적재 “검증”은 아직)
 - [ ] 검색 결과에서 본법과 시행규칙이 명확히 구분되어 표시되는가?
 - [ ] "병실 면적" 검색 시 관련 시행규칙 조문이 상단에 노출되는가?

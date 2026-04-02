@@ -17,6 +17,7 @@
 | `scripts/collect-laws.mjs` | 상세(JSON) 내부에서 `법령ID`/`법령일련번호`를 재귀 추출해 수집 큐에 추가(시행령/시행규칙 등 확장) |
 | `scripts/collect-laws.mjs` | 조문 content 생성 시 `별표`를 포함하는 필드 문자열을 함께 결합해 검색 인덱스 누락 완화 |
 | `scripts/schema.sql` | Supabase `laws/articles` 스키마 + `search_articles()` RPC를 main에 추가(Phase 3 기반) |
+| `scripts/schema.sql` | `articles.category` 컬럼 및 `idx_articles_category` 인덱스 추가 |
 
 ### 미해결
 - 실제 `node scripts/collect-laws.mjs` 실행 후 “시행규칙 조문 적재 여부”와 “병실 면적” 우선 노출을 검증해야 함
