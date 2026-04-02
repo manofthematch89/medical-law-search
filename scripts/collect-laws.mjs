@@ -30,6 +30,15 @@ const HEADERS = {
   'Accept': 'application/json',
 };
 
+function isLikelyLawId(value) {
+  const s = String(value || '').trim();
+  if (!s) return false;
+  // 법령ID / 법령일련번호는 숫자 기반으로 내려오는 경우가 많음.
+  // 너무 짧거나(예: "1") 너무 길면 제외.
+  // (조문 상세 id에 포함되는 법령ID 예시: "000218" 처럼 6자리도 존재)
+  return /^\d{6,10}$/.test(s);
+}
+
 async function fetchLawList(keyword) {
   const url = `https://www.law.go.kr/DRF/lawSearch.do?OC=${process.env.LAW_API_OC}&target=law&type=JSON&query=${encodeURIComponent(keyword)}`;
   const res = await fetch(url, { headers: HEADERS });
@@ -60,12 +69,63 @@ function extractContent(article) {
   const main = String(article['조문내용'] || '');
   const subs = toArray(article['항'] || article.항);
   const subText = subs.map(s => String(s['항내용'] || '')).filter(Boolean).join(' ');
-  return main ? `${main} ${subText}`.trim() : subText;
+
+  // Phase 5: 별표(표/부속자료) 참조가 기사 단위에 포함되는 케이스가 있어
+  // "별표*" 키를 가진 필드 문자열을 함께 붙여 검색 인덱스 누락을 완화한다.
+  const extraTableParts = [];
+  for (const [k, v] of Object.entries(article || {})) {
+    if (!k.includes('별표')) continue;
+    if (typeof v === 'string' && v.trim()) extraTableParts.push(v.trim());
+    if (Array.isArray(v)) {
+      for (const item of v) {
+        if (typeof item === 'string' && item.trim()) extraTableParts.push(item.trim());
+      }
+    }
+  }
+
+  const joined = [main, subText, extraTableParts.join(' ')].filter(Boolean).join(' ');
+  return joined.trim();
+}
+
+function extractRelatedLawIdsFromDetail(detail) {
+  const ids = new Set();
+  const seen = new WeakSet();
+
+  // detail 구조가 케이스별로 달라 재귀적으로 "법령ID/법령일련번호" 값을 수집한다.
+  const stack = [{ v: detail, depth: 0 }];
+  while (stack.length) {
+    const { v, depth } = stack.pop();
+    if (!v || depth > 6) continue;
+    if (typeof v !== 'object') continue;
+    if (seen.has(v)) continue;
+    seen.add(v);
+
+    if (Array.isArray(v)) {
+      for (const item of v) stack.push({ v: item, depth: depth + 1 });
+      continue;
+    }
+
+    for (const [k, child] of Object.entries(v)) {
+      if (k === '법령ID' || k === '법령일련번호') {
+        if (isLikelyLawId(child)) ids.add(String(child));
+      }
+      if (child && typeof child === 'object') {
+        stack.push({ v: child, depth: depth + 1 });
+      }
+    }
+  }
+
+  return [...ids];
 }
 
 async function collect() {
   console.log('🚀 법령 데이터 수집 및 Supabase 저장을 시작합니다...');
+
   const keywords = ['의료', '응급', '소방', '건축', '안전', '보건'];
+
+  // Phase 5: "키워드로 뜬 법령" 뿐 아니라, 법령 상세(JSON) 안에 포함된 하위/관련 법령 ID까지 확장 수집.
+  const lawQueue = [];
+  const seenLawIds = new Set();
 
   for (const kw of keywords) {
     console.log(`🔍 키워드 [${kw}] 검색 중...`);
@@ -77,37 +137,72 @@ async function collect() {
     }
 
     for (const law of laws) {
-      // 실제 필드명: 법령명한글, 법령구분명, 법령ID, 시행일자, 법령일련번호
-      const lawName = law['법령명한글'] || law['법령명'] || '';
-      const lawId   = law['법령ID']    || law['법령일련번호'] || '';
-      console.log(`📑 [${lawName}] 수집 및 저장 중...`);
-      try {
-        const detail = await fetchLawDetail(lawId);
-        if (!detail) { console.warn(`  ⚠️ 상세 없음`); continue; }
+      const lawId = law['법령ID'] || law['법령일련번호'] || '';
+      if (!isLikelyLawId(lawId)) continue;
+      if (seenLawIds.has(lawId)) continue;
+      seenLawIds.add(lawId);
+      lawQueue.push(String(lawId));
+    }
+  }
 
-        await supabase.from('laws').upsert({
-          law_id:        lawId,
-          law_name:      lawName,
-          law_type:      law['법령구분명'] || '',
-          effective_date: law['시행일자']  || '',
-          law_serial_no: law['법령일련번호'] || '',
-        });
+  console.log(`📋 총 ${lawQueue.length}개 법령 ID를 수집 큐에 적재했습니다.`);
 
-        const articles = toArray(detail['조문']?.['조문단위']);
-        for (const article of articles) {
-          const articleNo = String(article['@조문번호'] || article['조문번호'] || '');
-          await supabase.from('articles').upsert({
-            id:            `${lawId}_${articleNo}`,
-            law_id:        lawId,
-            article_no:    articleNo,
-            article_title: article['조문제목'] || '',
-            content:       extractContent(article),
-          });
-        }
-        await delay(400);
-      } catch (err) {
-        console.error(`❌ [${lawName}] 오류:`, err.message);
+  while (lawQueue.length) {
+    const lawId = lawQueue.shift();
+    try {
+      const detail = await fetchLawDetail(lawId);
+      if (!detail) {
+        console.warn(`  ⚠️ [${lawId}] 상세 없음`);
+        continue;
       }
+
+      // 기본정보 필드명은 케이스별로 조금 달라서 fallback을 넓게 둔다.
+      const base = detail['기본정보'] || {};
+      const lawName =
+        base['법령명한글'] || base['법령명'] || '';
+      const lawType =
+        base['법령구분'] || base['법령구분명'] || '';
+      const effectiveDate =
+        base['시행일자'] || '';
+      const lawSerialNo =
+        base['법령일련번호'] || '';
+
+      console.log(`📑 [${lawName || lawId}] 조문/연관법령 수집 중...`);
+
+      await supabase.from('laws').upsert({
+        law_id: lawId,
+        law_name: lawName,
+        law_type: lawType,
+        effective_date: effectiveDate,
+        law_serial_no: lawSerialNo,
+      });
+
+      const articles = toArray(detail['조문']?.['조문단위']);
+      for (const article of articles) {
+        const articleNo = String(article['@조문번호'] || article['조문번호'] || '');
+        if (!articleNo) continue;
+        await supabase.from('articles').upsert({
+          id: `${lawId}_${articleNo}`,
+          law_id: lawId,
+          article_no: articleNo,
+          article_title: article['조문제목'] || '',
+          content: extractContent(article),
+        });
+      }
+
+      // 관련/하위 법령 ID 확장 적재 (Phase 5 핵심)
+      const relatedIds = extractRelatedLawIdsFromDetail(detail);
+      for (const rid of relatedIds) {
+        if (!isLikelyLawId(rid)) continue;
+        if (rid === lawId) continue;
+        if (seenLawIds.has(rid)) continue;
+        seenLawIds.add(rid);
+        lawQueue.push(rid);
+      }
+
+      await delay(400);
+    } catch (err) {
+      console.error(`❌ [${lawId}] 오류:`, err.message);
     }
   }
   console.log('✅ 모든 데이터 수집 및 저장 완료!');

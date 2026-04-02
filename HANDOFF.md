@@ -1,7 +1,7 @@
 # HANDOFF.md — MdLaw 프로젝트 인수인계 가이드
 
 > 이 파일을 AI 대화 시작할 때 PROGRESS.md와 함께 공유하면 바로 이어서 작업할 수 있습니다.
-> **마지막 업데이트: 2026-04-02 (Phase 4 최종)**
+> **마지막 업데이트: 2026-04-02 (Phase 5 시작)**
 
 ---
 
@@ -15,6 +15,15 @@ URL: https://medical-law-search.vercel.app
 ```
 
 ---
+
+## 🚧 Phase 5 진행 (2026-04-02)
+시행규칙/별표 누락을 줄이기 위해 수집 단계 DB 적재를 고도화했습니다.
+
+- **`scripts/collect-laws.mjs`**: `lawService.do` 상세(JSON) 내부에서 `법령ID`/`법령일련번호`가 등장하는 연관(하위) 법령 ID를 재귀적으로 추출해 수집 큐에 추가(시행령/시행규칙 등 확장)
+- **`scripts/collect-laws.mjs`**: 조문 본문(content) 생성 시 `별표*` 관련 필드(키에 `별표` 포함)를 함께 합쳐 인덱스 누락 완화
+- **`scripts/schema.sql`**: Supabase `laws/articles` 스키마 + `search_articles()` RPC를 main에 추가(Phase 3 기반)
+
+> 아직 검증 필요: 실제로 “시행규칙 조문”이 DB에 적재되고 “병실 면적” 검색 우선 노출까지 되는지 `node scripts/collect-laws.mjs` 실행 후 확인
 
 ## ✅ Phase 4 완료 (2026-04-02)
 
