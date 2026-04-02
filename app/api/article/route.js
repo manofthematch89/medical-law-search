@@ -96,7 +96,7 @@ export async function GET(request) {
       effectiveDate,
       category: getCategoryFromLawName(lawName),
       content: articleContent,
-      source: `https://www.law.go.kr/lsSc.do?query=${encodeURIComponent(lawName)}`,
+      source: `https://www.law.go.kr/lsInfo.do?lsiSeq=${lawId}`,
       priority: 1,
     });
   } catch (err) {

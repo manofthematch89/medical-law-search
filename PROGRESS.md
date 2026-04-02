@@ -2,7 +2,77 @@
 
 ---
 
-## ✅ 오늘 완료 (2026-03-27)
+## ✅ 완료 (2026-04-02) — 원문 보기 source URL 버그 수정
+
+### 문제
+- 검색 결과 카드의 "원문 ↗" 버튼은 정상 작동
+- 상세 페이지(article/[id])의 "법제처 원문 보기 ↗" 버튼이 작동 안 함 (같은 페이지로 이동)
+
+### 원인
+- `article/route.js`의 `source`가 `lsSc.do?query=${lawName}` 형식
+- `lawService.do` API 응답의 `법령명` 필드가 객체(`{"#text": "..."}`)로 올 때 파싱 실패 → lawName이 빈 문자열 → source URL이 `lsSc.do?query=`(빈 쿼리)
+- `href`가 빈 값이면 현재 페이지로 이동 → "같은 걸로 뜬다"는 증상
+
+### 수정 (핀포인트)
+| 파일 | 변경 내용 |
+|---|---|
+| `app/api/article/route.js` | `source`: `lsSc.do?query=lawName` → `lsInfo.do?lsiSeq=${lawId}` |
+| `app/api/search/route.js` | 동일하게 `lsInfo.do?lsiSeq=${lawId}` 로 통일 |
+
+→ `lawId`는 항상 존재하는 숫자값이므로 파싱 오류 없음
+→ 두 버튼 모두 법제처 해당 법령 상세 페이지로 직접 연결
+
+---
+
+## ✅ 완료 (2026-04-01) — Supabase 로컬 검색 전환 (Phase 3)
+
+### 배경
+- 법제처 실시간 API 방식 한계 (매 요청마다 10개 법령 × 조문 전체 fetch → 느림, 불안정)
+- Supabase DB에 조문 전체 사전 적재 → `search_articles()` RPC로 빠른 검색으로 전환
+
+### 완료된 작업
+
+| 항목 | 상태 |
+|---|---|
+| `scripts/schema.sql` 작성 | ✅ |
+| `scripts/collect-laws.mjs` 작성 및 버그 수정 | ✅ |
+| `app/api/search/route.js` Supabase 버전 (워크트리) | ✅ |
+| `collect-laws.mjs` 실행 → Supabase 데이터 적재 | ✅ |
+| 워크트리 → main 머지 + Vercel 배포 | ✅ |
+
+### collect-laws.mjs 수정 이력 (2026-04-01 디버깅)
+
+| 문제 | 원인 | 수정 |
+|---|---|---|
+| 결과 없음 | `--env-file` Node 20.6+ 전용 → OC 값 미로드 | `readFileSync`로 `.env.local` 직접 파싱 |
+| 결과 없음 | `Referer` 헤더 없음 → 법제처 API 차단 | `Referer: https://medical-law-search.vercel.app/` 추가 |
+| `[undefined]` 오류 | `law.법령명칭` 없음 (실제: `법령명한글`) | 필드명 수정 |
+| 조문 파싱 오류 | `data.Law` 없음 (실제: `data.법령`) | `fetchLawDetail` 반환값 수정 |
+| 항 내용 누락 | `article.조문내용`만 저장 | `extractContent()` 추가 (항 내용 합산) |
+
+### 실행 방법 (재수집 필요 시)
+```bash
+# 반드시 프로젝트 루트에서 실행
+node scripts/collect-laws.mjs
+```
+- `.env.local` 자동 로드 (스크립트 내부에서 처리)
+- 키워드: 의료, 응급, 소방, 건축, 안전, 보건 (각 최대 10개 법령)
+- 약 400ms 딜레이 × 법령 수 → 수분 소요
+
+### 새 Supabase 검색 구조
+
+```
+collect-laws.mjs 실행 (1회성 or 법령 개정 시)
+  법제처 API → laws 테이블 (법령 메타) + articles 테이블 (조문 본문)
+
+검색 요청 시
+  keywordMap 변환 → supabase.rpc('search_articles', { kw, lmt: 50 })
+  → PostgreSQL ILIKE + GIN 인덱스 → 결과 반환
+```
+
+---
+
+## ✅ 완료 (2026-03-27)
 
 ### 검색 API 구조 전면 교체 — app/api/search/route.js
 
