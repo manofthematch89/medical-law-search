@@ -45,18 +45,74 @@ const ai = new GoogleGenAI({ apiKey: GEMINI_API_KEY });
 // 필요 시 .env.local에 GEMINI_EMBEDDING_MODEL로 오버라이드
 const GEMINI_EMBEDDING_MODEL = process.env.GEMINI_EMBEDDING_MODEL || "gemini-embedding-001";
 
+function parseArgs(argv) {
+  const opts = {
+    limit: null,
+    lawId: "",
+    idPrefix: "",
+  };
+
+  for (let i = 0; i < argv.length; i++) {
+    const a = argv[i];
+    if (a === "--limit") {
+      const v = Number(argv[i + 1]);
+      if (!Number.isNaN(v) && v > 0) opts.limit = Math.floor(v);
+      i++;
+      continue;
+    }
+    if (a === "--law-id") {
+      opts.lawId = String(argv[i + 1] || "").trim();
+      i++;
+      continue;
+    }
+    if (a === "--id-prefix") {
+      opts.idPrefix = String(argv[i + 1] || "").trim();
+      i++;
+      continue;
+    }
+  }
+  return opts;
+}
+
 async function generateEmbeddings() {
   console.log('🚀 벡터 변환 작업을 시작합니다...');
   console.log(`[GEMINI] embedding model: ${GEMINI_EMBEDDING_MODEL}`);
+  const opts = parseArgs(process.argv.slice(2));
+  console.log(`[RUN] options: ${JSON.stringify(opts)}`);
 
-  const { data: articles, error } = await supabase
+  // 스키마 적용 상태에 따라 embedding_vector 컬럼이 없을 수 있어 fallback 지원
+  let useEmbeddingVector = true;
+  let query = supabase
     .from('articles')
-    .select('id, article_title, content')
-    .or('embedding.is.null,embedding_vector.is.null'); // 아직 변환 안 된 것만
+    .select('id, law_id, article_title, content')
+    .or('embedding.is.null,embedding_vector.is.null'); // 신규 스키마 기준
 
+  if (opts.lawId) query = query.eq("law_id", opts.lawId);
+  if (opts.idPrefix) query = query.like("id", `${opts.idPrefix}%`);
+  if (opts.limit) query = query.limit(opts.limit);
+
+  let articlesRes = await query;
+
+  if (articlesRes.error && String(articlesRes.error.message || "").includes("embedding_vector")) {
+    useEmbeddingVector = false;
+    console.log("[DB] embedding_vector 컬럼 없음 → embedding 컬럼만 사용하는 fallback 모드로 진행");
+
+    let fallbackQuery = supabase
+      .from('articles')
+      .select('id, law_id, article_title, content')
+      .is('embedding', null);
+    if (opts.lawId) fallbackQuery = fallbackQuery.eq("law_id", opts.lawId);
+    if (opts.idPrefix) fallbackQuery = fallbackQuery.like("id", `${opts.idPrefix}%`);
+    if (opts.limit) fallbackQuery = fallbackQuery.limit(opts.limit);
+
+    articlesRes = await fallbackQuery;
+  }
+
+  const { data: articles, error } = articlesRes;
   if (error) throw error;
   console.log(`대상 조문: ${articles.length}개`);
 
+  let successCount = 0;
   for (const article of articles) {
     try {
       const text = `${article.article_title} ${article.content}`;
@@ -72,12 +128,16 @@ async function generateEmbeddings() {
         throw new Error("EMPTY_EMBEDDING");
       }
 
+      const updatePayload = useEmbeddingVector
+        ? { embedding, embedding_vector: embedding }
+        : { embedding };
       await supabase
         .from('articles')
-        .update({ embedding, embedding_vector: embedding })
+        .update(updatePayload)
         .eq('id', article.id);
 
       console.log(`✅ 완료 (ID: ${article.id})`);
+      successCount++;
       // 무료 티어 속도 제한 방지 (1초 대기)
       await new Promise(resolve => setTimeout(resolve, 1000));
     } catch (e) {
@@ -96,9 +156,14 @@ async function generateEmbeddings() {
       ) {
         throw new Error("GEMINI_EMBEDDING_MODEL_NOT_SUPPORTED");
       }
+
+      // 무료 할당량 초과(429) 시 계속 시도해도 전부 실패하므로 즉시 중단
+      if (msg.includes('"code":429') || msg.includes("RESOURCE_EXHAUSTED") || msg.includes("Quota exceeded")) {
+        throw new Error("GEMINI_QUOTA_EXCEEDED");
+      }
     }
   }
-  console.log('✨ 모든 작업이 완료되었습니다.');
+  console.log(`✨ 모든 작업이 완료되었습니다. (성공 ${successCount}건)`);
 }
 
 generateEmbeddings().catch((e) => {
@@ -107,8 +172,12 @@ generateEmbeddings().catch((e) => {
   } else if (String(e?.message || "") === "GEMINI_EMBEDDING_MODEL_NOT_SUPPORTED") {
     console.error("🛑 중단: 현재 설정된 embedding 모델이 v1beta에서 embedContent를 지원하지 않습니다.");
     console.error("→ `.env.local`에 `GEMINI_EMBEDDING_MODEL=embedding-001` 같은 값으로 지정 후 재시도하세요.");
+  } else if (String(e?.message || "") === "GEMINI_QUOTA_EXCEEDED") {
+    console.error("🛑 중단: Gemini EmbedContent 일일 할당량(무료 티어)을 초과했습니다.");
+    console.error("→ 내일(쿼터 리셋 후) 같은 명령을 다시 실행하면 남은 건부터 이어서 진행됩니다.");
   } else {
     console.error("💥 스크립트 오류:", e);
   }
-  process.exit(1);
+  // 강제 종료 시 Windows 환경에서 uv assertion 로그가 나올 수 있어 반환만 처리
+  return;
 });
