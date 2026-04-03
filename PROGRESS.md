@@ -2,6 +2,21 @@
 
 ---
 
+## ✅ 완료 (2026-04-03) — 임베딩 스크립트 샘플링·쿼터·스키마 fallback
+
+### 문제
+- 로컬에서만 수정된 `generate-embeddings.mjs`가 커밋되지 않아 원격과 불일치
+
+### 수정 (핀포인트)
+| 파일 | 변경 내용 |
+|---|---|
+| `scripts/generate-embeddings.mjs` | `--limit`, `--law-id`, `--id-prefix` 샘플링 옵션 |
+| `scripts/generate-embeddings.mjs` | 429/쿼터 시 중단 메시지 |
+| `scripts/generate-embeddings.mjs` | `embedding_vector` 없을 때 `embedding`만 대상으로 하는 fallback |
+
+### 배포
+- `main` 푸시 완료 (커밋 `e174c83`)
+
 ## ✅ 완료 (2026-04-02) — 검색 API 의미검색 전환 + 긴 문장 fallback 보강
 
 ### 문제
