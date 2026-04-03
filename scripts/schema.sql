@@ -21,6 +21,9 @@ CREATE TABLE IF NOT EXISTS laws (
   created_at     TIMESTAMPTZ DEFAULT NOW()
 );
 
+-- 기존 DB(laws 테이블만 예전 마이그레이션으로 만든 경우): law_type 컬럼 보강
+ALTER TABLE laws ADD COLUMN IF NOT EXISTS law_type TEXT;
+
 -- ============================================================
 -- 3. articles 테이블 — 조문 본문
 -- ============================================================

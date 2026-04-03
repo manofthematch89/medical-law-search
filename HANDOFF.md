@@ -1,7 +1,7 @@
 # HANDOFF.md — MdLaw 프로젝트 인수인계 가이드
 
 > 이 파일을 AI 대화 시작할 때 PROGRESS.md와 함께 공유하면 바로 이어서 작업할 수 있습니다.
-> **마지막 업데이트: 2026-04-03 (의미검색 체크리스트 + match_articles 실패 시 fallback)**
+> **마지막 업데이트: 2026-04-03 (임베딩 실패 시 텍스트 검색 + 수집 시드 확장)**
 
 ---
 
@@ -28,13 +28,13 @@ URL: https://medical-law-search.vercel.app
 ## 🚧 Phase 5 진행 (2026-04-02)
 시행규칙/별표 누락을 줄이기 위해 수집 단계 DB 적재를 고도화했습니다.
 
-- **`scripts/collect-laws.mjs`**: `lawService.do` 상세(JSON) 내부에서 `법령ID`/`법령일련번호`가 등장하는 연관(하위) 법령 ID를 재귀적으로 추출해 수집 큐에 추가(시행령/시행규칙 등 확장)
+- **`scripts/collect-laws.mjs`**: `lawSearch.do` 결과 행마다 JSON 전체에서 관련 ID 추출 + 의료법·시행령·시행규칙 등 **법령명 시드 키워드** 추가; `lawService.do` 상세에서도 연관 ID를 큐에 확장
 - **`scripts/collect-laws.mjs`**: 조문 본문(content) 생성 시 `별표*` 관련 필드(키에 `별표` 포함)를 함께 합쳐 인덱스 누락 완화
 - **`scripts/schema.sql`**: Supabase `laws/articles` 스키마 + `search_articles()` RPC를 main에 추가(Phase 3 기반)
 - **`scripts/schema.sql`**: `articles.category` 컬럼 + `idx_articles_category` 인덱스 추가
 - **`scripts/categorize-laws.mjs`**: `articles.category` 비어있는 조문을 텍스트 키워드 규칙으로 분류 후 upsert (실행 결과: `totalUpdated=2820`)
 - **`app/search/page.js`**: 검색 결과에서 `category` 목록을 동적으로 추출해 필터 버튼(탭)으로 노출, 클릭 시 해당 category만 필터링
-- **`app/api/search/route.js`**: Gemini 임베딩 + Supabase `match_articles` RPC 기반 의미검색; 벡터 0건이거나 **`match_articles` 오류(RPC/`embedding_vector` 미적용)** 시 `search_articles` 텍스트 fallback
+- **`app/api/search/route.js`**: Gemini 임베딩 + `match_articles` 시도; **키 없음·쿼터·임베딩 실패·벡터 0건·RPC 오류** 시 곧바로 `search_articles` 텍스트 검색(PHASE5 KeywordMap·토큰 매핑 보강)
 - **`scripts/generate-embeddings.mjs`**: Gemini 임베딩 생성 후 `articles.embedding` / `embedding_vector` 채우기. **실행은 사용자 로컬 전용**; 이미 채워진 행은 조건상 스킵되어 이어서 재개 가능.
 
 ### 임베딩 스크립트 실행 (로컬 — 사용자)
@@ -59,7 +59,7 @@ node scripts/generate-embeddings.mjs --id-prefix 000218_ --limit 100
 1. **Supabase SQL Editor**: `scripts/schema.sql`에서 `vector` 확장, `articles.embedding_vector`, 인덱스, **`match_articles`** RPC까지 실행(이미 있으면 생략).
 2. **로컬**: 쿼터 여유 있을 때 `node scripts/generate-embeddings.mjs`로 `embedding` + `embedding_vector` 채움(먼저 `--limit 50` 권장).
 3. **Vercel**: `SUPABASE_URL`, `SUPABASE_ANON_KEY`, **`NEXT_PUBLIC_GEMINI_API_KEY`** 설정(검색 시 요청마다 임베딩 호출).
-4. **비용**: 2·3 전에 스키마가 없어도 검색은 텍스트 fallback으로 동작할 수 있으나, **질의마다 Gemini 임베딩은 호출됨**(키/쿼터 필요).
+4. **비용**: 키가 있으면 요청마다 임베딩을 **시도**하고, 쿼터 초과·오류·빈 응답이면 **추가 호출 없이** 텍스트 검색만 수행. 키가 없으면 처음부터 텍스트만.
 
 > 남은 검증 필요: 실제로 “시행규칙 조문”이 DB에 적재되고 “병실 면적” 검색 시 시행규칙 관련 조문이 상단에 노출되는지 확인
 

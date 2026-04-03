@@ -121,11 +121,38 @@ function extractRelatedLawIdsFromDetail(detail) {
 async function collect() {
   console.log('🚀 법령 데이터 수집 및 Supabase 저장을 시작합니다...');
 
-  const keywords = ['의료', '응급', '소방', '건축', '안전', '보건'];
+  // 본법 + 시행령/시행규칙을 검색 단계에서부터 시드로 넣고, 응답 JSON 전체에서 관련 ID를 추출
+  const lawNameSeeds = [
+    '의료법',
+    '의료법 시행령',
+    '의료법 시행규칙',
+    '의료법시행령',
+    '의료법시행규칙',
+    '응급의료에 관한 법률',
+    '응급의료에 관한 법률 시행령',
+    '응급의료에 관한 법률 시행규칙',
+  ];
+  const topicKeywords = ['의료', '응급', '소방', '건축', '안전', '보건'];
+  const keywords = [...new Set([...lawNameSeeds, ...topicKeywords])];
 
   // Phase 5: "키워드로 뜬 법령" 뿐 아니라, 법령 상세(JSON) 안에 포함된 하위/관련 법령 ID까지 확장 수집.
   const lawQueue = [];
   const seenLawIds = new Set();
+
+  function enqueueLawIdsFromSearchRow(law) {
+    let ids = extractRelatedLawIdsFromDetail(law);
+    if (!ids.length) {
+      const lawId = law['법령ID'] || law['법령일련번호'] || '';
+      if (isLikelyLawId(lawId)) ids = [String(lawId)];
+    }
+    for (const lawId of ids) {
+      if (!isLikelyLawId(lawId)) continue;
+      const idStr = String(lawId);
+      if (seenLawIds.has(idStr)) continue;
+      seenLawIds.add(idStr);
+      lawQueue.push(idStr);
+    }
+  }
 
   for (const kw of keywords) {
     console.log(`🔍 키워드 [${kw}] 검색 중...`);
@@ -137,11 +164,7 @@ async function collect() {
     }
 
     for (const law of laws) {
-      const lawId = law['법령ID'] || law['법령일련번호'] || '';
-      if (!isLikelyLawId(lawId)) continue;
-      if (seenLawIds.has(lawId)) continue;
-      seenLawIds.add(lawId);
-      lawQueue.push(String(lawId));
+      enqueueLawIdsFromSearchRow(law);
     }
   }
 

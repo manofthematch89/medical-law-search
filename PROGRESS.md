@@ -2,6 +2,21 @@
 
 ---
 
+## ✅ 완료 (2026-04-03) — 임베딩 실패 시에도 텍스트 검색 + 수집 시드·schema law_type ALTER
+
+### 문제
+- Gemini 임베딩 쿼터/오류 시 검색 API가 500 또는 동작 불가에 가까움
+- 시행령·시행규칙이 검색 단계 큐에 덜 잡히는 경우
+- 예전 DB에 `laws.law_type` 없을 때 마이그레이션 필요
+
+### 수정 (핀포인트)
+| 파일 | 변경 내용 |
+|---|---|
+| `app/api/search/route.js` | 임베딩 단계 try-catch, 키 없음 시에도 500 금지 → `runTextSearch`; PHASE5 KeywordMap·토큰별 매핑 확장 |
+| `scripts/collect-laws.mjs` | 의료법·시행령·시행규칙 등 시드 키워드 + `lawSearch` 각 행에서 `extractRelatedLawIdsFromDetail`로 큐 적재 |
+| `scripts/schema.sql` | `ALTER TABLE laws ADD COLUMN IF NOT EXISTS law_type TEXT` |
+| `HANDOFF.md` | 검색·수집 동기 요약 갱신 |
+
 ## ✅ 완료 (2026-04-03) — match_articles 실패 시 검색 텍스트 fallback + HANDOFF 체크리스트
 
 ### 문제
