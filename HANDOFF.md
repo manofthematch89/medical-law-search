@@ -1,7 +1,7 @@
 # HANDOFF.md — MdLaw 프로젝트 인수인계 가이드
 
 > 이 파일을 AI 대화 시작할 때 PROGRESS.md와 함께 공유하면 바로 이어서 작업할 수 있습니다.
-> **마지막 업데이트: 2026-04-03 (작업 분담 정리)**
+> **마지막 업데이트: 2026-04-03 (의미검색 체크리스트 + match_articles 실패 시 fallback)**
 
 ---
 
@@ -34,7 +34,7 @@ URL: https://medical-law-search.vercel.app
 - **`scripts/schema.sql`**: `articles.category` 컬럼 + `idx_articles_category` 인덱스 추가
 - **`scripts/categorize-laws.mjs`**: `articles.category` 비어있는 조문을 텍스트 키워드 규칙으로 분류 후 upsert (실행 결과: `totalUpdated=2820`)
 - **`app/search/page.js`**: 검색 결과에서 `category` 목록을 동적으로 추출해 필터 버튼(탭)으로 노출, 클릭 시 해당 category만 필터링
-- **`app/api/search/route.js`**: Gemini 임베딩 + Supabase `match_articles` RPC 기반 의미검색으로 전환, 벡터 결과 0건일 때 `search_articles` fallback(긴 문장 토큰 분해) 보강
+- **`app/api/search/route.js`**: Gemini 임베딩 + Supabase `match_articles` RPC 기반 의미검색; 벡터 0건이거나 **`match_articles` 오류(RPC/`embedding_vector` 미적용)** 시 `search_articles` 텍스트 fallback
 - **`scripts/generate-embeddings.mjs`**: Gemini 임베딩 생성 후 `articles.embedding` / `embedding_vector` 채우기. **실행은 사용자 로컬 전용**; 이미 채워진 행은 조건상 스킵되어 이어서 재개 가능.
 
 ### 임베딩 스크립트 실행 (로컬 — 사용자)
@@ -54,6 +54,12 @@ node scripts/generate-embeddings.mjs --id-prefix 000218_ --limit 100
 - 필요 환경변수: `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `GEMINI_API_KEY`(또는 `NEXT_PUBLIC_GEMINI_API_KEY`)
 - 임베딩 모델: 기본 `gemini-embedding-001` (필요 시 `GEMINI_EMBEDDING_MODEL`로 변경)
 - `embedding_vector` 컬럼/`match_articles` RPC는 `scripts/schema.sql` 적용 후 사용. 미적용 시 스크립트는 `embedding` JSON만 대상으로 fallback.
+
+### 의미검색까지 완전히 맞추려면 — 사용자 순서
+1. **Supabase SQL Editor**: `scripts/schema.sql`에서 `vector` 확장, `articles.embedding_vector`, 인덱스, **`match_articles`** RPC까지 실행(이미 있으면 생략).
+2. **로컬**: 쿼터 여유 있을 때 `node scripts/generate-embeddings.mjs`로 `embedding` + `embedding_vector` 채움(먼저 `--limit 50` 권장).
+3. **Vercel**: `SUPABASE_URL`, `SUPABASE_ANON_KEY`, **`NEXT_PUBLIC_GEMINI_API_KEY`** 설정(검색 시 요청마다 임베딩 호출).
+4. **비용**: 2·3 전에 스키마가 없어도 검색은 텍스트 fallback으로 동작할 수 있으나, **질의마다 Gemini 임베딩은 호출됨**(키/쿼터 필요).
 
 > 남은 검증 필요: 실제로 “시행규칙 조문”이 DB에 적재되고 “병실 면적” 검색 시 시행규칙 관련 조문이 상단에 노출되는지 확인
 

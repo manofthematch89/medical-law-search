@@ -95,11 +95,15 @@ export async function GET(request) {
       match_count: count,
     });
     if (vecErr) {
-      console.error("[/api/search] match_articles 오류:", vecErr.message);
-      return NextResponse.json({ error: vecErr.message }, { status: 500 });
+      console.error(
+        "[/api/search] match_articles 오류 (embedding_vector/RPC 미적용 시 텍스트 검색으로 대체):",
+        vecErr.message
+      );
     }
 
-    const vectorMapped = (vectorResults || []).map((item) => {
+    const vectorMapped = vecErr
+      ? []
+      : (vectorResults || []).map((item) => {
       const fullContent = String(item.content || "");
       const summary = fullContent.length > 60 ? fullContent.slice(0, 60) + "…" : fullContent;
       const lawName = String(item.law_name || "");

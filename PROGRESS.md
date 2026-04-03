@@ -2,6 +2,20 @@
 
 ---
 
+## ✅ 완료 (2026-04-03) — match_articles 실패 시 검색 텍스트 fallback + HANDOFF 체크리스트
+
+### 문제
+- `embedding_vector` / `match_articles` 미적용 시 검색 API가 500으로 떨어져, 스키마를 아직 안 올린 상태에서 앱이 쓸 수 없었음
+
+### 원인
+- `match_articles` RPC 오류 시 즉시 500 반환; 벡터 결과 0건일 때만 텍스트 fallback이 동작함
+
+### 수정 (핀포인트)
+| 파일 | 변경 내용 |
+|---|---|
+| `app/api/search/route.js` | `match_articles` 오류 시 로그 후 `search_articles` 경로로 동일 fallback |
+| `HANDOFF.md` | 의미검색 완료용 사용자 순서(스키마 → 임베딩 스크립트 → Vercel 키·쿼터 안내) 추가 |
+
 ## ✅ 완료 (2026-04-03) — HANDOFF 작업 분담·임베딩 실행 안내 정리
 
 ### 수정 (핀포인트)
