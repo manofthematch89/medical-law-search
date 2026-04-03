@@ -1,7 +1,16 @@
 # HANDOFF.md — MdLaw 프로젝트 인수인계 가이드
 
 > 이 파일을 AI 대화 시작할 때 PROGRESS.md와 함께 공유하면 바로 이어서 작업할 수 있습니다.
-> **마지막 업데이트: 2026-04-02 (Phase 5 진행)**
+> **마지막 업데이트: 2026-04-03 (작업 분담 정리)**
+
+---
+
+## 👥 작업 분담 (사용자 vs AI)
+
+| 담당 | 할 일 |
+|------|--------|
+| **사용자** | 로컬에서 `node scripts/*.mjs` 실행 (`collect-laws`, `categorize-laws`, `generate-embeddings`). `.env.local` 유지·키 발급. Supabase SQL Editor에서 `scripts/schema.sql` 반영 여부 확인·적용. Vercel 대시보드에 배포용 환경 변수 설정. Gemini 쿼터·비용 관리. |
+| **AI (코드 에이전트)** | 저장소 내 코드·스키마·문서 수정, 커밋/푸시(요청 시), 버그 원인 분석 및 패치 제안. **사용자 PC에서 스크립트를 대신 실행하지 않음** — API 호출·DB 쓰기·쿼터 소모는 사용자 환경에서만 수행 가능. |
 
 ---
 
@@ -26,14 +35,25 @@ URL: https://medical-law-search.vercel.app
 - **`scripts/categorize-laws.mjs`**: `articles.category` 비어있는 조문을 텍스트 키워드 규칙으로 분류 후 upsert (실행 결과: `totalUpdated=2820`)
 - **`app/search/page.js`**: 검색 결과에서 `category` 목록을 동적으로 추출해 필터 버튼(탭)으로 노출, 클릭 시 해당 category만 필터링
 - **`app/api/search/route.js`**: Gemini 임베딩 + Supabase `match_articles` RPC 기반 의미검색으로 전환, 벡터 결과 0건일 때 `search_articles` fallback(긴 문장 토큰 분해) 보강
-- **`scripts/generate-embeddings.mjs`**: Gemini 임베딩 생성 후 `articles.embedding` 채우기 (실행 완료)
+- **`scripts/generate-embeddings.mjs`**: Gemini 임베딩 생성 후 `articles.embedding` / `embedding_vector` 채우기. **실행은 사용자 로컬 전용**; 이미 채워진 행은 조건상 스킵되어 이어서 재개 가능.
 
-### 임베딩 스크립트 실행 (로컬)
+### 임베딩 스크립트 실행 (로컬 — 사용자)
 ```bash
+# 전체(남은 행만 처리)
 node scripts/generate-embeddings.mjs
+
+# 검증·쿼터 절약(권장: 먼저 소량)
+node scripts/generate-embeddings.mjs --limit 50
+
+# 특정 법령만
+node scripts/generate-embeddings.mjs --law-id 000218 --limit 100
+
+# ID prefix(조문군)
+node scripts/generate-embeddings.mjs --id-prefix 000218_ --limit 100
 ```
 - 필요 환경변수: `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `GEMINI_API_KEY`(또는 `NEXT_PUBLIC_GEMINI_API_KEY`)
 - 임베딩 모델: 기본 `gemini-embedding-001` (필요 시 `GEMINI_EMBEDDING_MODEL`로 변경)
+- `embedding_vector` 컬럼/`match_articles` RPC는 `scripts/schema.sql` 적용 후 사용. 미적용 시 스크립트는 `embedding` JSON만 대상으로 fallback.
 
 > 남은 검증 필요: 실제로 “시행규칙 조문”이 DB에 적재되고 “병실 면적” 검색 시 시행규칙 관련 조문이 상단에 노출되는지 확인
 
@@ -82,6 +102,8 @@ node scripts/collect-laws.mjs
 | `SUPABASE_URL` | Supabase 프로젝트 URL | `.env.local` ✅ / Vercel ✅ |
 | `SUPABASE_ANON_KEY` | Supabase 읽기용 키 | `.env.local` ✅ / Vercel ✅ |
 | `SUPABASE_SERVICE_ROLE_KEY` | collect-laws.mjs 쓰기용 키 | `.env.local` ✅ (Vercel 불필요) |
+| `GEMINI_API_KEY` 또는 `NEXT_PUBLIC_GEMINI_API_KEY` | 임베딩 스크립트·검색 API(의미검색)용 | `.env.local` ✅ / Vercel ✅(검색 시) |
+| `GEMINI_EMBEDDING_MODEL` | (선택) 임베딩 모델 오버라이드 | `.env.local` |
 
 > `collect-laws.mjs`는 `--env-file` 없이 `node scripts/collect-laws.mjs`만으로 실행 가능
 > (스크립트 내부에서 `.env.local` 자동 로드, Referer 헤더 자동 포함)
