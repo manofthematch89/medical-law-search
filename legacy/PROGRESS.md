@@ -2,6 +2,23 @@
 
 ---
 
+## ✅ 완료 (2026-04-12) — Server Actions 리팩토링 및 아키텍처 단순화
+
+### 개선 내용
+- **구조 혁신**: 기존 `화면(Client) -> lib -> API(Server) -> DB/AI`의 3단계 구조를 `화면(Client) -> Server Action -> DB/AI`의 2단계로 단순화.
+- **보안 및 성능**: `"use server"` 지시어를 활용해 민감한 비즈니스 로직과 API 키를 서버 환경으로 격리하고 네트워크 오버헤드 감소.
+- **AI 요약 실무 적용**: 더미 데이터를 제거하고 Gemini 1.5 엔진을 직접 연결하여 실시간 법령 분석 기능 활성화.
+
+### 내역 (핀포인트)
+| 파일 | 변경 내용 |
+|---|---|
+| `actions/lawActions.js` | **신규 생성**. 검색, 상세 조회, AI 요약 로직을 통합 서버 액션으로 구현. |
+| `app/search/page.js` | `searchLawsAction` 서버 액션 연동. |
+| `app/article/[id]/page.js` | `getLawDetailAction` 서버 액션 연동. |
+| `components/AiSummaryPanel.js` | `getAiSummaryAction` 연동 및 실제 AI 분석 결과 UI 구현. |
+| `app/api/` | **폴더 삭제**. 서버 액션 대체에 따른 레거시 엔드포인트 정리. |
+| `lib/lawApi.js`, `lib/dummyData.js` | **파일 삭제**. 사용되지 않는 클라이언트 헬퍼 및 더미 데이터 정리. |
+
 ## ✅ 완료 (2026-04-03) — 임베딩 실패 시에도 텍스트 검색 + 수집 시드·schema law_type ALTER
 
 ### 문제

@@ -11,31 +11,21 @@ const CATEGORY_COLORS = {
 };
 
 export default function LawCard({ law }) {
-  const categoryStyle =
-    CATEGORY_COLORS[law.category] || "bg-gray-50 text-gray-700 border-gray-200";
+  const categoryStyle = CATEGORY_COLORS[law.category] || "bg-gray-50 text-gray-700 border-gray-200";
 
-  const preview =
-    law.content.length > 100
-      ? law.content.slice(0, 100) + "..."
-      : law.content;
+  const preview = law.content.length > 100 ? law.content.slice(0, 100) + "..." : law.content;
 
   return (
     <div className="bg-white border border-gray-200 rounded-xl p-4 hover:border-blue-300 hover:shadow-sm transition-all">
       {/* 상단: 카테고리 + 시행일 */}
       <div className="flex items-center justify-between mb-2">
-        <span
-          className={`text-xs font-medium px-2 py-0.5 rounded-full border ${categoryStyle}`}
-        >
-          {law.category}
-        </span>
+        <span className={`text-xs font-medium px-2 py-0.5 rounded-full border ${categoryStyle}`}>{law.category}</span>
         <span className="text-xs text-gray-400">{law.effectiveDate} 시행</span>
       </div>
 
       {/* 법령명 + 조문번호 */}
       <div className="flex items-baseline gap-2 mb-1">
-        <span className="text-sm font-semibold text-gray-800">
-          {law.lawName}
-        </span>
+        <span className="text-sm font-semibold text-gray-800">{law.lawName}</span>
         <span className="text-xs text-blue-600 font-medium">{law.article}</span>
       </div>
 
