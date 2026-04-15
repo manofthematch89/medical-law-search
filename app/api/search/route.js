@@ -109,9 +109,7 @@ async function runTextSearch(supabase, keyword) {
       effectiveDate: String(row.effective_date || ""),
       category: dbCategory || getCategoryFromLawName(lawName),
       content: fullContent,
-      source: row.law_serial_no
-        ? `https://www.law.go.kr/lsInfo.do?lsiSeq=${row.law_serial_no}`
-        : `https://www.law.go.kr/lsSc.do?query=${encodeURIComponent(lawName)}`,
+      source: `https://www.law.go.kr/lsSc.do?query=${encodeURIComponent(lawName)}`,
       priority: getPriority(lawName),
     };
   });

@@ -1,7 +1,7 @@
 # HANDOFF.md — MdLaw 프로젝트 인수인계 가이드
 
 > 이 파일을 AI 대화 시작할 때 PROGRESS.md와 함께 공유하면 바로 이어서 작업할 수 있습니다.
-> **마지막 업데이트: 2026-04-03 (임베딩 실패 시 텍스트 검색 + 수집 시드 확장)**
+> **마지막 업데이트: 2026-04-15 (법문 링크 깨짐 근본 원인 재확인 및 URL 형식 수정 대기 중)**
 
 ---
 
@@ -25,8 +25,15 @@ URL: https://medical-law-search.vercel.app
 
 ---
 
-## 🚧 Phase 5 진행 (2026-04-02)
+## 🚧 Phase 5 진행 (2026-04-02 ~ 2026-04-14)
 시행규칙/별표 누락을 줄이기 위해 수집 단계 DB 적재를 고도화했습니다.
+
+### ✅ 2026-04-14 추가 수정 — /api/article Supabase 전환
+- **`app/api/article/route.js`**: 법제처 API(`lawService.do`) 직접 호출 완전 제거
+- 이제 `articles` 테이블에서 `id`로 단건 조회 + `laws` 테이블 조인으로 처리
+- source URL: `law_serial_no` 있으면 `lsInfo.do?lsiSeq={번호}`, 없으면 `lsSc.do?query=` fallback
+- **법문 링크 깨짐 근본 원인 해소** (법제처 API `lawName` 누락 문제 제거)
+- `LAW_API_OC` 환경변수는 이제 `collect-laws.mjs` 전용 (서빙 코드에서 불필요)
 
 - **`scripts/collect-laws.mjs`**: `lawSearch.do` 결과 행마다 JSON 전체에서 관련 ID 추출 + 의료법·시행령·시행규칙 등 **법령명 시드 키워드** 추가; `lawService.do` 상세에서도 연관 ID를 큐에 확장
 - **`scripts/collect-laws.mjs`**: 조문 본문(content) 생성 시 `별표*` 관련 필드(키에 `별표` 포함)를 함께 합쳐 인덱스 누락 완화
@@ -90,11 +97,12 @@ node scripts/collect-laws.mjs
 
 | 파일 | 역할 |
 |------|------|
-| `app/api/search/route.js` | 검색 핵심 (현재: 구 법제처 API / 워크트리: Supabase 버전) |
-| `app/api/article/route.js` | 조문 상세 조회 (법제처 API, 그대로 유지) |
+| `app/api/search/route.js` | 검색 핵심 — Supabase (의미검색 → 텍스트 검색 fallback) |
+| `app/api/article/route.js` | 조문 상세 조회 — **Supabase** (2026-04-14 전환, 법제처 API 제거) |
+| `components/AiSummaryPanel.js` | AI 요약 패널 — **UI만 완성, Gemini 호출 미연결 (더미 텍스트)** |
 | `scripts/schema.sql` | Supabase DB 스키마 (테이블 + 인덱스 + RPC) |
 | `scripts/collect-laws.mjs` | 법제처 API → Supabase 데이터 수집 스크립트 |
-| `app/api/debug/route.js` | API 테스트용 (삭제 예정) |
+| `app/api/debug/route.js` | API 테스트용 (**삭제 필요 — 운영 보안 리스크**) |
 | `lib/lawApi.js` | 클라이언트 진입점 (USE_DUMMY=false 유지) |
 | `PROGRESS.md` | 세션별 작업 내역 |
 
@@ -180,8 +188,40 @@ view.dispatch({ changes: { from: 0, to: view.state.doc.length, insert: newConten
 
 ---
 
+## 🔴 현재 실제 작동 현황 (2026-04-15 기준)
+
+> 코드가 무너지지 않는다 ≠ 기능이 작동한다. 아래는 사용자 관점의 정직한 현황.
+
+| 기능 | 상태 | 원인 |
+|------|------|------|
+| 검색 (단어) | △ 작동 | keywordMap 10개 수준, 매칭 커버리지 좁음 |
+| 검색 (자연어/문장) | ❌ 미작동 | 임베딩 미생성 시 텍스트 fallback만 동작, 결과 부실 |
+| AI 요약 | ❌ 미구현 | `AiSummaryPanel.js`가 하드코딩 더미 텍스트 그대로 |
+| 법문 링크 | ❌ 미해결 (원인 확정) | `lsInfo.do?lsiSeq=숫자` 방식 URL이 법제처에서 열리지 않음을 최종 확인. 전부 `lsSc.do?query=법령명` 방식으로 수정하는 작업 대기 중 |
+| 카테고리 필터 | △ UI만 | 텍스트 규칙 분류라 정확도 낮음 |
+| 검색 결과 수 | △ 20건 한계 | 하드코딩, 관련도 낮은 것으로 채워지는 경우 있음 |
+| 시행규칙/별표 | ❌ 미포함 | collect-laws.mjs 재실행 + 검증 필요 |
+
+---
+
+## 📋 다음 작업 우선순위 (2026-04-14 기준)
+
+| 순위 | 작업 | 비고 |
+|------|------|------|
+| 1 | 법문 링크 URL 수정 | `/api/search`, `/api/article` 내부 `lsInfo.do` 방식 URL을 `lsSc.do`로 일괄 수정 |
+| 2 | `AiSummaryPanel.js`에 Gemini API 호출 연결 | UI 완성, 호출 로직만 추가하면 됨 |
+| 3 | `app/api/debug/route.js` 삭제 | 운영 보안 리스크 |
+| 4 | 임베딩 생성 (`generate-embeddings.mjs` 로컬 실행) | 자연어 검색 작동의 전제 조건 |
+| 5 | `collect-laws.mjs` 재실행 + 시행규칙 적재 검증 | "병실 면적" 등 핵심 검색어 품질 |
+| 6 | keywordMap 확장 | 실사용 검색어 수집 후 추가 |
+| 7 | `app/page.js` 자주 찾는 주제 버튼 채우기 | "추후 추가 예정" 박스 상태 |
+
+---
+
 ## 🔴 알려진 한계
 
 1. **시행규칙/별표 미포함**: `collect-laws.mjs`는 본법 조문만 수집. 시행규칙 별표(예: 병실 면적 기준)는 별도 법령명으로 수집 필요.
 2. **수집 키워드 6개**: 현재 의료/응급/소방/건축/안전/보건. 더 넓히려면 `collect-laws.mjs`의 `keywords` 배열에 추가.
 3. **캐시 없음**: Supabase 검색은 실시간. Vercel edge 캐시 없으므로 필요 시 추가.
+4. **`NEXT_PUBLIC_GEMINI_API_KEY`**: 서버 전용 키인데 `NEXT_PUBLIC_` 접두사로 클라이언트 번들에 노출됨. 추후 `GEMINI_API_KEY`로 통일 권장.
+5. **`@google/generative-ai` 중복**: `package.json`에 `@google/genai`와 둘 다 있음. 현재 코드는 `@google/genai`만 사용하므로 전자 제거 권장.

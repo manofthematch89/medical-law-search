@@ -2,6 +2,35 @@
 
 ---
 
+## 🚧 진행 (2026-04-15) — 법문 원문 링크 깨짐 현상 근본 원인 재확인
+
+### 문제
+- 검색 결과 카드나 상세 페이지의 "원문 보기" 링크 클릭 시 빈 화면이 나오거나 정상적인 조문으로 연결되지 않음.
+
+### 원인 재확인 (URL 형식 검증)
+- `/api/search` 및 `/api/article`에서 `law_serial_no`가 있을 때 `lsInfo.do?lsiSeq=` 형태로 링크를 만들고 있었음.
+- 실제로 법제처에서 `lsInfo.do?lsiSeq=숫자` 형태의 브라우저 다이렉트 접근이 안 되거나 다른 의미로 사용되어 깨짐을 확인.
+- 법제처의 올바른 연결 방식은 파라미터를 이용한 `lsSc.do?query=법령명` 방식(`lawName`)뿐임을 파악.
+
+### 예정된 수정 (사용자 승인 대기)
+- `app/api/search/route.js` 및 `app/api/article/route.js`에서 조문별 외부 `source` URL 생성 로직을 조건문 없이 일괄 `https://www.law.go.kr/lsSc.do?query=법령명`으로 통일 예정.
+
+## ✅ 완료 (2026-04-14) — /api/article Supabase 전환 (법제처 API 의존성 제거)
+
+### 문제
+- `/api/article`이 법제처 API(`lawService.do`)를 직접 호출 → `lawName` 필드 누락으로 source URL이 빈 채 생성
+- 검색(Supabase)과 상세 조회(법제처 API) 간 데이터 소스 불일치
+
+### 원인
+- Phase 3에서 검색 API는 Supabase로 전환했지만 상세 조회는 법제처 API 그대로였음
+- 법제처 `lawService.do` 응답의 `기본정보`에 `법령명` 필드가 없는 케이스 존재
+
+### 수정 (핀포인트)
+| 파일 | 변경 내용 |
+|---|---|
+| `app/api/article/route.js` | 법제처 API 호출 제거 → Supabase `articles` + `laws` 조인 단건 조회로 전환 |
+| `app/api/article/route.js` | source URL을 `law_serial_no` 기반 `lsInfo.do?lsiSeq=` 로 생성 (없을 시 `lsSc.do?query=` fallback) |
+
 ## ✅ 완료 (2026-04-03) — 임베딩 실패 시에도 텍스트 검색 + 수집 시드·schema law_type ALTER
 
 ### 문제

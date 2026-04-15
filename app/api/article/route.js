@@ -1,29 +1,18 @@
-export const runtime = "edge";
 // ============================================================
-// app/api/article/route.js — 법제처 조문 상세 API 프록시 (서버사이드)
+// app/api/article/route.js — Supabase 조문 상세 조회 (Phase 5~)
 //
-// 역할: 브라우저 → Next.js API Route → 법제처 API
+// 역할: articles 테이블에서 id로 단건 조회 + laws 조인
 // 사용법: GET /api/article?id={lawId}_{articleNumber}
 // ============================================================
 
 import { NextResponse } from "next/server";
+import { createClient } from "@supabase/supabase-js";
 
-// 법제처 API는 한국 IP에서만 접근 가능 → 서울 리전 고정
+export const runtime = "edge";
 export const preferredRegion = "icn1";
 
-const LAW_API_OC = process.env.LAW_API_OC || "";
-const LAW_API_BASE = "https://www.law.go.kr/DRF";
-
-function toArray(val) {
-  if (!val) return [];
-  return Array.isArray(val) ? val : [val];
-}
-
-function formatDate(dateStr) {
-  if (!dateStr || String(dateStr).length !== 8) return String(dateStr || "");
-  const s = String(dateStr);
-  return `${s.slice(0, 4)}-${s.slice(4, 6)}-${s.slice(6, 8)}`;
-}
+const SUPABASE_URL = process.env.SUPABASE_URL || "";
+const SUPABASE_ANON_KEY = process.env.SUPABASE_ANON_KEY || "";
 
 function getCategoryFromLawName(lawName) {
   if (lawName.includes("의료법")) return "의료법 계열";
@@ -34,14 +23,6 @@ function getCategoryFromLawName(lawName) {
   return "기타";
 }
 
-function extractArticleContent(articleUnit) {
-  const mainContent = articleUnit["조문내용"] || articleUnit.조문내용 || "";
-  const subItems = toArray(articleUnit["항"] || articleUnit.항);
-  if (!subItems.length) return mainContent;
-  const subTexts = subItems.map((item) => item["항내용"] || item.항내용 || "").filter(Boolean).join(" ");
-  return mainContent ? `${mainContent} ${subTexts}` : subTexts;
-}
-
 export async function GET(request) {
   try {
     const { searchParams } = new URL(request.url);
@@ -49,59 +30,59 @@ export async function GET(request) {
 
     if (!id.trim()) return NextResponse.json(null, { status: 400 });
 
-    if (!LAW_API_OC) {
-      return NextResponse.json({ error: "LAW_API_OC 환경변수가 설정되지 않았습니다." }, { status: 500 });
+    if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
+      return NextResponse.json(
+        { error: "SUPABASE_URL / SUPABASE_ANON_KEY 환경변수가 설정되지 않았습니다." },
+        { status: 500 }
+      );
     }
 
-    // id 형식: {lawId}_{articleNumber} (예: "219997_22")
-    const underscoreIndex = id.indexOf("_");
-    if (underscoreIndex === -1) {
-      return NextResponse.json({ error: "잘못된 id 형식입니다." }, { status: 400 });
-    }
+    const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
-    const lawId = id.slice(0, underscoreIndex);
-    const articleNumber = id.slice(underscoreIndex + 1);
+    const { data, error } = await supabase
+      .from("articles")
+      .select(`
+        id,
+        law_id,
+        article_no,
+        article_title,
+        content,
+        category,
+        laws (
+          law_name,
+          effective_date,
+          law_serial_no
+        )
+      `)
+      .eq("id", id)
+      .single();
 
-    const url = `${LAW_API_BASE}/lawService.do?OC=${LAW_API_OC}&target=law&type=JSON&ID=${lawId}`;
-    const res = await fetch(url, { next: { revalidate: 3600 }, headers: { "Accept": "application/json", "Referer": "https://medical-law-search.vercel.app/" } });
+    if (error || !data) return NextResponse.json(null, { status: 404 });
 
-    if (!res.ok) throw new Error(`법제처 API 오류: ${res.status}`);
-
-    const data = await res.json();
-    const lawInfo = data?.법령?.기본정보;
-    if (!lawInfo) return NextResponse.json(null, { status: 404 });
-
-    const rawLawName = lawInfo["법령명"];
-    const lawNameFromField = typeof rawLawName === "object" ? rawLawName?.["#text"] || "" : String(rawLawName || "");
-    const lawName = lawNameFromField || String(lawInfo["법령명한글"] || "");
-    const effectiveDate = formatDate(lawInfo["시행일자"]);
-
-    const articles = toArray(data?.법령?.조문?.조문단위);
-    const article = articles.find((a) => {
-      const num = String(a["@조문번호"] || a["조문번호"] || a.조문번호 || "");
-      return num === articleNumber;
-    });
-
-    if (!article) return NextResponse.json(null, { status: 404 });
-
-    const articleTitle = String(article["조문제목"] || article.조문제목 || "");
-    const articleContent = extractArticleContent(article);
-    const summary = articleContent.length > 60 ? articleContent.slice(0, 60) + "…" : articleContent;
+    const lawName = String(data.laws?.law_name || "");
+    const effectiveDate = String(data.laws?.effective_date || "");
+    const lawSerialNo = data.laws?.law_serial_no;
+    const fullContent = String(data.content || "");
+    const summary = fullContent.length > 60 ? fullContent.slice(0, 60) + "…" : fullContent;
+    const dbCategory = String(data.category || "").trim();
 
     return NextResponse.json({
-      id,
+      id: data.id,
       lawName,
-      article: `제${articleNumber}조`,
-      title: articleTitle,
+      article: `제${data.article_no}조`,
+      title: String(data.article_title || ""),
       summary,
       effectiveDate,
-      category: getCategoryFromLawName(lawName),
-      content: articleContent,
+      category: dbCategory || getCategoryFromLawName(lawName),
+      content: fullContent,
       source: `https://www.law.go.kr/lsSc.do?query=${encodeURIComponent(lawName)}`,
       priority: 1,
     });
   } catch (err) {
     console.error("[/api/article] 오류:", err);
-    return NextResponse.json({ error: err.message || "조문 조회 중 오류가 발생했습니다." }, { status: 500 });
+    return NextResponse.json(
+      { error: err.message || "조문 조회 중 오류가 발생했습니다." },
+      { status: 500 }
+    );
   }
 }
